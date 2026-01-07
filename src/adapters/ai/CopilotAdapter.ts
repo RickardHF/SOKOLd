@@ -37,6 +37,7 @@ export class CopilotAdapter implements AIToolAdapter {
     const startTime = Date.now();
     
     try {
+      // For suggestions, keep using suggest mode
       const result = await runCommand(
         'gh',
         ['copilot', 'suggest', '-t', 'shell', prompt],
@@ -66,12 +67,14 @@ export class CopilotAdapter implements AIToolAdapter {
       // Construct the implementation prompt
       const prompt = this.buildImplementationPrompt(context);
       
+      // Use gh copilot with the prompt directly
       const result = await runCommandStreaming(
         'gh',
-        ['copilot', 'suggest', '-t', 'shell', prompt, this.autoApproveFlag],
+        ['copilot', prompt],
         { 
           cwd: context.rootPath, 
           timeout: 300000, // 5 minutes
+          env: { ...process.env, GH_COPILOT_AUTO_APPROVE: 'true' },
         }
       );
 
@@ -95,12 +98,15 @@ export class CopilotAdapter implements AIToolAdapter {
     const startTime = Date.now();
     
     try {
+      // Use gh copilot with the prompt directly (not suggest mode)
+      // This invokes the agent with auto-approval of tool usage
       const result = await runCommandStreaming(
         'gh',
-        ['copilot', 'suggest', '-t', 'shell', prompt, this.autoApproveFlag],
+        ['copilot', prompt],
         { 
           cwd, 
           timeout: 600000, // 10 minutes for complex operations
+          env: { ...process.env, GH_COPILOT_AUTO_APPROVE: 'true' },
         }
       );
 
