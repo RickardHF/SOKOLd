@@ -290,8 +290,34 @@ export class PipelineOrchestrator {
   private async executeSpecify(description: string): Promise<void> {
     if (!this.aiAdapter) throw new Error('AI adapter not initialized');
     
-    const prompt = `Use the speckit-specify agent to create a feature specification for: ${description}`;
-    await this.aiAdapter.runWithAutoApprove(prompt, this.rootPath);
+    this.logger.verbose('Generating feature specification...');
+    
+    const { promises: fs } = await import('fs');
+    const path = await import('path');
+    
+    // Ask AI to create the spec content
+    const prompt = `Create a detailed feature specification based on this request: "${description}".
+    
+Include these sections:
+- Feature title and overview
+- User scenarios with acceptance criteria  
+- Technical requirements
+- Dependencies
+- Implementation notes
+
+Format as markdown. Be specific and actionable.`;
+    
+    const result = await this.aiAdapter.suggest(prompt, this.rootPath);
+    if (!result.success) {
+      throw new Error(`Failed to generate specification: ${result.error}`);
+    }
+    
+    // Save to specs/main/spec.md
+    const specDir = path.join(this.rootPath, 'specs', 'main');
+    await fs.mkdir(specDir, { recursive: true });
+    await fs.writeFile(path.join(specDir, 'spec.md'), result.output, 'utf-8');
+    
+    this.logger.verbose('Specification saved to specs/main/spec.md');
   }
 
   /**
@@ -300,8 +326,38 @@ export class PipelineOrchestrator {
   private async executePlan(): Promise<void> {
     if (!this.aiAdapter) throw new Error('AI adapter not initialized');
     
-    const prompt = 'Use the speckit-plan agent to create an implementation plan based on the current spec';
-    await this.aiAdapter.runWithAutoApprove(prompt, this.rootPath);
+    this.logger.verbose('Creating implementation plan...');
+    
+    const { promises: fs } = await import('fs');
+    const path = await import('path');
+    
+    // Read the current spec
+    const specPath = path.join(this.rootPath, 'specs', 'main', 'spec.md');
+    const specContent = await fs.readFile(specPath, 'utf-8');
+    
+    // Ask AI to create implementation plan
+    const prompt = `Based on this specification, create a detailed implementation plan:
+
+${specContent}
+
+Create a plan with:
+- Architecture/design decisions
+- Component breakdown
+- Data models
+- API contracts if applicable
+- Testing strategy
+
+Format as markdown.`;
+    
+    const result = await this.aiAdapter.suggest(prompt, this.rootPath);
+    if (!result.success) {
+      throw new Error(`Failed to generate plan: ${result.error}`);
+    }
+    
+    // Save to specs/main/plan.md
+    await fs.writeFile(path.join(this.rootPath, 'specs', 'main', 'plan.md'), result.output, 'utf-8');
+    
+    this.logger.verbose('Plan saved to specs/main/plan.md');
   }
 
   /**
@@ -310,8 +366,42 @@ export class PipelineOrchestrator {
   private async executeTasks(): Promise<void> {
     if (!this.aiAdapter) throw new Error('AI adapter not initialized');
     
-    const prompt = 'Use the speckit-tasks agent to generate actionable tasks from the plan';
-    await this.aiAdapter.runWithAutoApprove(prompt, this.rootPath);
+    this.logger.verbose('Breaking down into tasks...');
+    
+    const { promises: fs } = await import('fs');
+    const path = await import('path');
+    
+    // Read spec
+    const specPath = path.join(this.rootPath, 'specs', 'main', 'spec.md');
+    const specContent = await fs.readFile(specPath, 'utf-8');
+    
+    // Ask AI to create task list
+    const prompt = `Based on this spec, create a list of actionable implementation tasks:
+
+SPEC:
+${specContent}
+
+Generate a numbered task list in markdown format. Each task should be:
+- Specific and actionable
+- Include file names/paths where relevant
+- Ordered by dependency
+- Testable
+
+Format as:
+## Tasks
+1. [Task description]
+2. [Task description]
+...`;
+    
+    const result = await this.aiAdapter.suggest(prompt, this.rootPath);
+    if (!result.success) {
+      throw new Error(`Failed to generate tasks: ${result.error}`);
+    }
+    
+    // Save to specs/main/tasks.md
+    await fs.writeFile(path.join(this.rootPath, 'specs', 'main', 'tasks.md'), result.output, 'utf-8');
+    
+    this.logger.verbose('Tasks saved to specs/main/tasks.md');
   }
 
   /**
@@ -320,8 +410,43 @@ export class PipelineOrchestrator {
   private async executeImplement(): Promise<void> {
     if (!this.aiAdapter) throw new Error('AI adapter not initialized');
     
-    const prompt = 'Use the speckit-implement agent to implement all tasks in tasks.md';
-    await this.aiAdapter.runWithAutoApprove(prompt, this.rootPath);
+    this.logger.verbose('Implementing tasks...');
+    
+    const { promises: fs } = await import('fs');
+    const path = await import('path');
+    
+    // Read all context
+    const specPath = path.join(this.rootPath, 'specs', 'main', 'spec.md');
+    const tasksPath = path.join(this.rootPath, 'specs', 'main', 'tasks.md');
+    
+    const specContent = await fs.readFile(specPath, 'utf-8');
+    const tasksContent = await fs.readFile(tasksPath, 'utf-8');
+    
+    // Ask AI to implement - using suggest to get shell commands
+    const prompt = `Implement this feature by executing the necessary commands:
+
+SPECIFICATION:
+${specContent.substring(0, 500)}...
+
+TASKS:
+${tasksContent}
+
+Generate the shell commands needed to implement these tasks. Include:
+- Creating/modifying files
+- Installing dependencies if needed
+- Setting up configuration
+
+Provide actual executable shell commands.`;
+    
+    const result = await this.aiAdapter.suggest(prompt, this.rootPath);
+    if (!result.success) {
+      throw new Error(`Failed to get implementation commands: ${result.error}`);
+    }
+    
+    this.logger.info('AI suggested commands:');
+    this.logger.info(result.output);
+    this.logger.warning('Note: Automatic command execution is not yet implemented for safety.');
+    this.logger.warning('Please review and execute the suggested commands manually.');
   }
 
   /**
@@ -347,8 +472,11 @@ export class PipelineOrchestrator {
       
       while (retries <= maxRetries) {
         try {
-          await this.runCommand(check.command);
+          const output = await this.runCommand(check.command);
           this.logger.success(`${check.name} passed`);
+          if (output.stdout && this.logger.isVerbose()) {
+            this.logger.verbose(output.stdout);
+          }
           break;
         } catch (error) {
           retries++;
@@ -365,22 +493,183 @@ export class PipelineOrchestrator {
   }
 
   /**
-   * Run a shell command
+   * Run a shell command and capture detailed output
    */
-  private async runCommand(command: string): Promise<void> {
+  private async runCommand(command: string): Promise<{ stdout: string; stderr: string }> {
     const { execa } = await import('execa');
-    await execa(command, { shell: true, cwd: this.rootPath, stdio: 'inherit' });
+    try {
+      const result = await execa(command, { 
+        shell: true, 
+        cwd: this.rootPath,
+        reject: false,
+      });
+      
+      if (result.exitCode !== 0) {
+        throw new Error(`Command failed with exit code ${result.exitCode}\n${result.stderr || result.stdout}`);
+      }
+      
+      return { stdout: result.stdout, stderr: result.stderr };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(String(error));
+    }
   }
 
   /**
-   * Auto-fix quality check failures using AI
+   * Auto-fix quality check failures using AI CLI
    */
   private async autoFix(checkName: string, error: unknown): Promise<void> {
     if (!this.aiAdapter) throw new Error('AI adapter not initialized');
     
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const prompt = `Fix the ${checkName} failures. Error: ${errorMessage}`;
-    await this.aiAdapter.runWithAutoApprove(prompt, this.rootPath);
+    
+    // First, log the failure as a task in specs for tracking
+    await this.logFailureAsTask(checkName, errorMessage);
+    
+    // Build context for the AI to fix the issue
+    const { promises: fs } = await import('fs');
+    const path = await import('path');
+    
+    // Read current spec/tasks for context
+    let specContext = '';
+    try {
+      const specPath = path.join(this.rootPath, 'specs', 'main', 'spec.md');
+      specContext = await fs.readFile(specPath, 'utf-8');
+    } catch {
+      // No spec file, continue without it
+    }
+    
+    // Create the fix prompt for the AI CLI
+    const fixPrompt = `Fix the following ${checkName} failure in this project.
+
+## Error Output:
+${errorMessage}
+
+## Project Context:
+${specContext ? specContext.substring(0, 1000) : 'No spec available'}
+
+## Instructions:
+1. Analyze the error output to understand what failed
+2. Read the relevant source files to understand the issue
+3. Make the necessary code changes to fix the ${checkName} failure
+4. Do not change unrelated code
+5. Ensure your fix addresses the root cause, not just the symptom`;
+
+    this.logger.info(`Invoking AI CLI to fix ${checkName} failures...`);
+    
+    // Use the AI CLI to actually fix the code
+    const result = await this.invokeAICLI(fixPrompt);
+    
+    if (!result.success) {
+      this.logger.warning(`AI CLI fix attempt completed with issues: ${result.error || 'unknown'}`);
+    } else {
+      this.logger.success(`AI CLI applied fixes for ${checkName}`);
+    }
+  }
+
+  /**
+   * Log a failure as a task in the specs for tracking
+   */
+  private async logFailureAsTask(checkName: string, errorMessage: string): Promise<void> {
+    const { promises: fs } = await import('fs');
+    const path = await import('path');
+    
+    const tasksPath = path.join(this.rootPath, 'specs', 'main', 'tasks.md');
+    
+    try {
+      let tasksContent = '';
+      try {
+        tasksContent = await fs.readFile(tasksPath, 'utf-8');
+      } catch {
+        tasksContent = '# Tasks\n\n';
+      }
+      
+      // Add failure task if not already present
+      const failureMarker = `## Fix: ${checkName} failure`;
+      if (!tasksContent.includes(failureMarker)) {
+        const timestamp = new Date().toISOString();
+        const failureTask = `\n${failureMarker} (${timestamp})\n\n\`\`\`\n${errorMessage.substring(0, 500)}\n\`\`\`\n\n- [ ] Analyze and fix the ${checkName} error\n- [ ] Verify fix resolves the issue\n\n`;
+        
+        tasksContent += failureTask;
+        await fs.writeFile(tasksPath, tasksContent, 'utf-8');
+        this.logger.verbose(`Logged ${checkName} failure as task`);
+      }
+    } catch (err) {
+      // Non-critical, continue even if logging fails
+      this.logger.verbose(`Could not log failure task: ${err}`);
+    }
+  }
+
+  /**
+   * Invoke the AI CLI to perform fixes
+   */
+  private async invokeAICLI(prompt: string): Promise<{ success: boolean; error?: string }> {
+    const { runCommandStreaming } = await import('../../utils/process.js');
+    
+    try {
+      // Determine which CLI to use based on adapter type
+      const isCopilot = this.aiAdapter?.type === AIToolType.COPILOT;
+      
+      if (isCopilot) {
+        // For GitHub Copilot, use the interactive suggest command
+        const fixResult = await this.runCopilotWithPrompt(prompt);
+        return fixResult;
+      } else {
+        // For Claude CLI
+        const result = await runCommandStreaming(
+          'claude',
+          ['-p', prompt],
+          { cwd: this.rootPath, timeout: 300000 }
+        );
+        
+        return {
+          success: result.exitCode === 0,
+          error: result.exitCode !== 0 ? result.stderr : undefined,
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * Run Copilot CLI with a prompt for fixing issues
+   */
+  private async runCopilotWithPrompt(prompt: string): Promise<{ success: boolean; error?: string }> {
+    const { execa } = await import('execa');
+    
+    try {
+      // Use gh copilot in a way that can accept our fix request
+      // The best approach is to write the prompt to a temp file and reference it,
+      // or use the explain/suggest commands creatively
+      
+      // For now, use suggest with shell type to get fix commands
+      const result = await execa('gh', ['copilot', 'suggest', '-t', 'shell', 
+        `Fix this error by modifying the source code: ${prompt.substring(0, 500)}`
+      ], {
+        cwd: this.rootPath,
+        timeout: 300000,
+        reject: false,
+        stdin: 'inherit',
+        stdout: 'inherit',
+        stderr: 'inherit',
+      });
+      
+      return {
+        success: result.exitCode === 0,
+        error: result.exitCode !== 0 ? 'Copilot suggest failed' : undefined,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   private getStepIcon(step: PipelineStep): string {

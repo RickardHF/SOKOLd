@@ -51,24 +51,138 @@ export class ConfigLoader {
 
   async generateDefault(cwd: string, detectedTool: AIToolType): Promise<void> {
     const configPath = path.join(cwd, '.sokold.yaml');
+    
+    // Detect project type and generate appropriate commands
+    const detectedCommands = await this.detectProjectCommands(cwd);
+    
     const config: Partial<Configuration> = {
       aiTool: detectedTool === AIToolType.COPILOT ? 'copilot' : 'claude',
       maxRetries: 3,
       timeout: 300,
       checks: {
-        tests: true,
-        linting: true,
-        build: true,
+        tests: detectedCommands.test !== null,
+        linting: detectedCommands.lint !== null,
+        build: detectedCommands.build !== null,
       },
       commands: {
-        test: 'npm test',
-        lint: 'npm run lint',
-        build: 'npm run build',
+        test: detectedCommands.test ?? '',
+        lint: detectedCommands.lint ?? '',
+        build: detectedCommands.build ?? '',
       },
     };
     await saveConfigFile(configPath, config);
     this.configPath = configPath;
     this.mergeConfig(config);
+  }
+
+  private async detectProjectCommands(cwd: string): Promise<{
+    test: string | null;
+    lint: string | null;
+    build: string | null;
+  }> {
+    // Check for various project types
+    const packageJsonPath = path.join(cwd, 'package.json');
+    const cargoTomlPath = path.join(cwd, 'Cargo.toml');
+    const goModPath = path.join(cwd, 'go.mod');
+    const requirementsPath = path.join(cwd, 'requirements.txt');
+    const pyprojectPath = path.join(cwd, 'pyproject.toml');
+    const gemfilePath = path.join(cwd, 'Gemfile');
+    const composerJsonPath = path.join(cwd, 'composer.json');
+    const buildGradlePath = path.join(cwd, 'build.gradle');
+    const pomXmlPath = path.join(cwd, 'pom.xml');
+    const makefile = path.join(cwd, 'Makefile');
+
+    // Node.js / JavaScript / TypeScript
+    if (await pathExists(packageJsonPath)) {
+      const fs = await import('fs/promises');
+      const pkg = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
+      const scripts = pkg.scripts || {};
+      
+      return {
+        test: scripts.test ? 'npm test' : null,
+        lint: scripts.lint ? 'npm run lint' : (scripts.eslint ? 'npm run eslint' : null),
+        build: scripts.build ? 'npm run build' : null,
+      };
+    }
+
+    // Rust
+    if (await pathExists(cargoTomlPath)) {
+      return {
+        test: 'cargo test',
+        lint: 'cargo clippy',
+        build: 'cargo build',
+      };
+    }
+
+    // Go
+    if (await pathExists(goModPath)) {
+      return {
+        test: 'go test ./...',
+        lint: 'golangci-lint run',
+        build: 'go build ./...',
+      };
+    }
+
+    // Python
+    if (await pathExists(pyprojectPath) || await pathExists(requirementsPath)) {
+      return {
+        test: 'pytest',
+        lint: 'ruff check .',
+        build: 'python -m build',
+      };
+    }
+
+    // Ruby
+    if (await pathExists(gemfilePath)) {
+      return {
+        test: 'bundle exec rspec',
+        lint: 'bundle exec rubocop',
+        build: null,
+      };
+    }
+
+    // PHP
+    if (await pathExists(composerJsonPath)) {
+      return {
+        test: 'vendor/bin/phpunit',
+        lint: 'vendor/bin/phpcs',
+        build: null,
+      };
+    }
+
+    // Java (Gradle)
+    if (await pathExists(buildGradlePath)) {
+      return {
+        test: './gradlew test',
+        lint: './gradlew checkstyle',
+        build: './gradlew build',
+      };
+    }
+
+    // Java (Maven)
+    if (await pathExists(pomXmlPath)) {
+      return {
+        test: 'mvn test',
+        lint: 'mvn checkstyle:check',
+        build: 'mvn package',
+      };
+    }
+
+    // Makefile projects (C/C++, etc.)
+    if (await pathExists(makefile)) {
+      return {
+        test: 'make test',
+        lint: null,
+        build: 'make',
+      };
+    }
+
+    // No project type detected - return nulls
+    return {
+      test: null,
+      lint: null,
+      build: null,
+    };
   }
 
   private getConfigPaths(cwd: string, options: ConfigLoaderOptions): string[] {
