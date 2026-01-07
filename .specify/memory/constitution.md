@@ -1,30 +1,20 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version: N/A → 1.0.0
-Rationale: Initial constitution for cross-platform CLI tool project
+Version: 1.0.0 → 1.0.1
+Rationale: Clarification of local-only development workflow
 
-Principles Created:
-- I. Cross-Platform Compatibility
-- II. CLI-First Design
-- III. Test-Driven Development
-- IV. Distribution & Packaging
-- V. Observability & Debugging
-- VI. Versioning & Stability
-- VII. Simplicity & Best Practices
-
-Sections Added:
-- Core Principles (7 principles)
-- Platform Standards
-- Development Workflow
-- Governance
+Changes:
+- Development Workflow: Clarified local-only branching (no remote repository required)
 
 Templates Status:
 ✅ plan-template.md - Constitution Check section aligns
 ✅ spec-template.md - User scenarios support CLI testing
 ✅ tasks-template.md - Task organization supports TDD and platform testing
+✅ agent-file-template.md - Generic template, no constitution-specific references
+✅ checklist-template.md - Generic template, no constitution-specific references
 
-Follow-up: None - all placeholders resolved
+Follow-up: None - all templates verified for consistency
 -->
 
 # Local-Agentic CLI Constitution
@@ -119,11 +109,12 @@ and Linux. Use CI/CD to build and test on actual target platforms, not emulation
 
 ## Development Workflow
 
-**Branching**: Feature branches MUST be named `###-feature-name` where ### is numeric.
+**Branching**: Feature branches MUST be named `###-feature-name` where ### is numeric. This
+project uses local-only development; no remote repository or PR workflow is required.
 
-**Code Review**: All changes MUST pass automated tests on all platforms before merge. PRs MUST
-include test coverage for new functionality. Complexity that violates simplicity principle
-MUST be justified in PR description.
+**Code Review**: All changes MUST pass automated tests on all platforms before integration.
+New functionality MUST include test coverage. Complexity that violates simplicity principle
+MUST be justified in commit messages or documentation.
 
 **Release Process**: Tag releases with vMAJOR.MINOR.PATCH. Build artifacts for all platforms
 in CI. Update CHANGELOG before release. Publish to package registries (npm, PyPI, crates.io)
@@ -149,4 +140,4 @@ upon merge.
 **Living Document**: This constitution evolves with the project. Template validation ensures
 consistency between constitution and workflow artifacts (plan, spec, tasks templates).
 
-**Version**: 1.0.0 | **Ratified**: 2026-01-07 | **Last Amended**: 2026-01-07
+**Version**: 1.0.1 | **Ratified**: 2026-01-07 | **Last Amended**: 2026-01-07
