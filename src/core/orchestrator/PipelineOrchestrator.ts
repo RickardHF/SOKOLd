@@ -295,7 +295,65 @@ export class PipelineOrchestrator {
     const { promises: fs } = await import('fs');
     const path = await import('path');
     
-    // Ask AI to create the spec content
+    // GitHub Copilot CLI (gh copilot suggest) only supports shell command suggestions
+    // It cannot generate markdown content. Check if we have Claude CLI instead.
+    if (this.aiAdapter.type === AIToolType.COPILOT) {
+      // Check if Claude CLI is available as fallback
+      const claudeAdapter = new (await import('../../adapters/ai/ClaudeAdapter.js')).ClaudeAdapter();
+      if (await claudeAdapter.detect()) {
+        this.logger.verbose('Switching to Claude CLI for content generation...');
+        this.aiAdapter = claudeAdapter;
+      } else {
+        // Neither tool can generate content - create a template spec
+        this.logger.warning('GitHub Copilot CLI cannot generate specifications.');
+        this.logger.warning('Creating template specification for manual editing...');
+        
+        const specDir = path.join(this.rootPath, 'specs', 'main');
+        await fs.mkdir(specDir, { recursive: true });
+        
+        const templateSpec = `# Feature Specification: ${description}
+
+## Overview
+
+${description}
+
+## User Scenarios & Acceptance Criteria
+
+### User Story 1 - [Story Title] (Priority: P1)
+
+[Add user story description]
+
+**Acceptance Scenarios**:
+
+1. **Given** [precondition], **When** [action], **Then** [expected result]
+
+## Technical Requirements
+
+### Functional Requirements
+
+- **FR-001**: [Add requirement]
+
+### Non-Functional Requirements
+
+- **NFR-001**: [Add requirement]
+
+## Implementation Notes
+
+[Add implementation details]
+
+---
+*Note: This template was generated because GitHub Copilot CLI cannot create specifications.*
+*Please edit this file manually or install Claude CLI for AI-assisted generation.*
+`;
+        
+        await fs.writeFile(path.join(specDir, 'spec.md'), templateSpec, 'utf-8');
+        this.logger.info('Template specification created at specs/main/spec.md');
+        this.logger.info('Please edit the specification manually, then run: sokold --continue');
+        return;
+      }
+    }
+    
+    // Use Claude CLI or other capable adapter for content generation
     const prompt = `Create a detailed feature specification based on this request: "${description}".
     
 Include these sections:
@@ -334,6 +392,48 @@ Format as markdown. Be specific and actionable.`;
     // Read the current spec
     const specPath = path.join(this.rootPath, 'specs', 'main', 'spec.md');
     const specContent = await fs.readFile(specPath, 'utf-8');
+    
+    // Check if using Copilot (which can't generate content)
+    if (this.aiAdapter.type === AIToolType.COPILOT) {
+      this.logger.warning('GitHub Copilot CLI cannot generate plans.');
+      this.logger.warning('Creating template plan for manual editing...');
+      
+      const templatePlan = `# Implementation Plan
+
+## Summary
+
+Based on the specification in spec.md.
+
+## Technical Context
+
+**Language/Version**: [To be determined]
+**Primary Dependencies**: [To be determined]
+**Testing**: [To be determined]
+
+## Architecture
+
+[Add architecture decisions]
+
+## Component Breakdown
+
+[Add component breakdown]
+
+## Tasks Overview
+
+1. [ ] Setup phase
+2. [ ] Core implementation  
+3. [ ] Testing
+4. [ ] Documentation
+
+---
+*Note: This template was generated because GitHub Copilot CLI cannot create plans.*
+*Please edit this file manually or install Claude CLI for AI-assisted generation.*
+`;
+      
+      await fs.writeFile(path.join(this.rootPath, 'specs', 'main', 'plan.md'), templatePlan, 'utf-8');
+      this.logger.info('Template plan created at specs/main/plan.md');
+      return;
+    }
     
     // Ask AI to create implementation plan
     const prompt = `Based on this specification, create a detailed implementation plan:
@@ -374,6 +474,48 @@ Format as markdown.`;
     // Read spec
     const specPath = path.join(this.rootPath, 'specs', 'main', 'spec.md');
     const specContent = await fs.readFile(specPath, 'utf-8');
+    
+    // Check if using Copilot (which can't generate content)
+    if (this.aiAdapter.type === AIToolType.COPILOT) {
+      this.logger.warning('GitHub Copilot CLI cannot generate tasks.');
+      this.logger.warning('Creating template tasks for manual editing...');
+      
+      const templateTasks = `# Tasks
+
+**Input**: spec.md, plan.md
+**Format**: \`- [ ] [ID] [P?] Description\`
+
+---
+
+## Phase 1: Setup
+
+- [ ] T001 Set up project structure
+- [ ] T002 Install dependencies
+
+## Phase 2: Core Implementation
+
+- [ ] T003 [P] Implement core feature
+- [ ] T004 [P] Add supporting functionality
+
+## Phase 3: Testing
+
+- [ ] T005 Write unit tests
+- [ ] T006 Write integration tests
+
+## Phase 4: Documentation
+
+- [ ] T007 Update README
+- [ ] T008 Add inline documentation
+
+---
+*Note: This template was generated because GitHub Copilot CLI cannot create tasks.*
+*Please edit this file manually or install Claude CLI for AI-assisted generation.*
+`;
+      
+      await fs.writeFile(path.join(this.rootPath, 'specs', 'main', 'tasks.md'), templateTasks, 'utf-8');
+      this.logger.info('Template tasks created at specs/main/tasks.md');
+      return;
+    }
     
     // Ask AI to create task list
     const prompt = `Based on this spec, create a list of actionable implementation tasks:
@@ -421,6 +563,22 @@ Format as:
     
     const specContent = await fs.readFile(specPath, 'utf-8');
     const tasksContent = await fs.readFile(tasksPath, 'utf-8');
+    
+    // Check if using Copilot (which can't do complex implementation)
+    if (this.aiAdapter.type === AIToolType.COPILOT) {
+      this.logger.warning('GitHub Copilot CLI has limited implementation capabilities.');
+      this.logger.info('');
+      this.logger.info('To implement your feature, you can:');
+      this.logger.info('  1. Use GitHub Copilot in your editor (VS Code, etc.)');
+      this.logger.info('  2. Install Claude CLI for automated implementation');
+      this.logger.info('  3. Implement manually following the tasks in specs/main/tasks.md');
+      this.logger.info('');
+      this.logger.info('Your specification files are ready:');
+      this.logger.info('  - specs/main/spec.md   (feature specification)');
+      this.logger.info('  - specs/main/plan.md   (implementation plan)');
+      this.logger.info('  - specs/main/tasks.md  (task breakdown)');
+      return;
+    }
     
     // Ask AI to implement - using suggest to get shell commands
     const prompt = `Implement this feature by executing the necessary commands:
@@ -522,6 +680,13 @@ Provide actual executable shell commands.`;
    */
   private async autoFix(checkName: string, error: unknown): Promise<void> {
     if (!this.aiAdapter) throw new Error('AI adapter not initialized');
+    
+    // GitHub Copilot CLI cannot do auto-fixes
+    if (this.aiAdapter.type === AIToolType.COPILOT) {
+      this.logger.warning(`GitHub Copilot CLI cannot auto-fix ${checkName} failures.`);
+      this.logger.info('Please fix the issue manually and re-run.');
+      return;
+    }
     
     const errorMessage = error instanceof Error ? error.message : String(error);
     

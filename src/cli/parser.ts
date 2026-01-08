@@ -30,12 +30,7 @@ program
   .option('--tool <name>', 'Use specific AI tool (copilot|claude)')
   .option('--review', 'Review generated spec before implementation')
   .hook('preAction', (thisCommand) => {
-    const opts = thisCommand.opts() as {
-      verbose?: boolean;
-      debug?: boolean;
-      quiet?: boolean;
-      noColor?: boolean;
-    };
+    const opts = thisCommand.opts();
     
     const logger = Logger.getInstance();
     

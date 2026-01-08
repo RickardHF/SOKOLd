@@ -291,7 +291,7 @@ export class ConfigLoader {
 
     (existingConfig as Record<string, unknown>)[key] = value;
 
-    const errors = validateConfig(existingConfig as Partial<Configuration>);
+    const errors = validateConfig(existingConfig);
     if (errors.length > 0) {
       throw new Error(`Invalid value: ${errors.join(', ')}`);
     }

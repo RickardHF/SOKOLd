@@ -36,8 +36,24 @@ export class CopilotAdapter implements AIToolAdapter {
   async suggest(prompt: string, cwd: string): Promise<AIToolResult> {
     const startTime = Date.now();
     
+    // NOTE: gh copilot suggest is designed for shell command suggestions only
+    // It cannot be used for generating markdown content or arbitrary text
+    // This method only works for short shell command suggestions
+    
+    // Check if the prompt looks like it's asking for a shell command
+    const isShellRequest = /^(how to|command to|install|run|execute|delete|create|remove|list|show|find|search)/i.test(prompt.trim());
+    
+    if (!isShellRequest && prompt.length > 200) {
+      // This is likely a content generation request, which suggest doesn't support
+      return {
+        success: false,
+        output: '',
+        error: 'GitHub Copilot CLI suggest command only supports shell command suggestions. For content generation, please use Claude CLI or provide content manually.',
+        duration: Date.now() - startTime,
+      };
+    }
+    
     try {
-      // For suggestions, keep using suggest mode
       const result = await runCommand(
         'gh',
         ['copilot', 'suggest', '-t', 'shell', prompt],

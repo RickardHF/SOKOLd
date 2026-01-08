@@ -1,0 +1,11 @@
+aiTool: copilot
+maxRetries: 3
+timeout: 300
+checks:
+  tests: true
+  linting: true
+  build: true
+commands:
+  test: npm test
+  lint: npm run lint
+  build: npm run build

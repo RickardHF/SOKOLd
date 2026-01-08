@@ -23,5 +23,5 @@ module.exports = {
     '@typescript-eslint/prefer-nullish-coalescing': 'error',
     '@typescript-eslint/prefer-optional-chain': 'error'
   },
-  ignorePatterns: ['dist', 'node_modules', 'jest.config.js', '.eslintrc.js']
+  ignorePatterns: ['dist', 'node_modules', 'jest.config.js', '.eslintrc.cjs']
 };
