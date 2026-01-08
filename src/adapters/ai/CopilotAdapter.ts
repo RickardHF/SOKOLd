@@ -3,60 +3,34 @@ import { commandExists, getCommandVersion, runCommand, runCommandStreaming } fro
 
 export class CopilotAdapter implements AIToolAdapter {
   readonly type = AIToolType.COPILOT;
-  readonly executable = 'gh';
-  readonly autoApproveFlag = '--yes';
+  readonly executable = 'copilot';
+  readonly autoApproveFlag = '--allow-all-tools';
 
   async detect(): Promise<boolean> {
-    // Check if gh CLI is installed
-    const ghExists = await commandExists('gh');
-    if (!ghExists) {
+    // Check if copilot CLI is installed (standalone command, not gh extension)
+    const copilotExists = await commandExists('copilot');
+    if (!copilotExists) {
       return false;
     }
 
-    // Check if copilot extension is available
-    const result = await runCommand('gh', ['copilot', '--help']);
+    // Verify it works
+    const result = await runCommand('copilot', ['--help']);
     return result.exitCode === 0;
   }
 
   async getVersion(): Promise<string | null> {
-    const ghVersion = await getCommandVersion('gh', '--version');
-    if (!ghVersion) {
-      return null;
-    }
-    
-    // Try to get copilot version
-    const result = await runCommand('gh', ['copilot', '--version']);
-    if (result.exitCode === 0) {
-      return result.stdout.trim() || ghVersion;
-    }
-    
-    return ghVersion;
+    const version = await getCommandVersion('copilot', '--version');
+    return version;
   }
 
   async suggest(prompt: string, cwd: string): Promise<AIToolResult> {
     const startTime = Date.now();
     
-    // NOTE: gh copilot suggest is designed for shell command suggestions only
-    // It cannot be used for generating markdown content or arbitrary text
-    // This method only works for short shell command suggestions
-    
-    // Check if the prompt looks like it's asking for a shell command
-    const isShellRequest = /^(how to|command to|install|run|execute|delete|create|remove|list|show|find|search)/i.test(prompt.trim());
-    
-    if (!isShellRequest && prompt.length > 200) {
-      // This is likely a content generation request, which suggest doesn't support
-      return {
-        success: false,
-        output: '',
-        error: 'GitHub Copilot CLI suggest command only supports shell command suggestions. For content generation, please use Claude CLI or provide content manually.',
-        duration: Date.now() - startTime,
-      };
-    }
-    
     try {
+      // Copilot CLI uses -p for prompt mode with non-interactive execution
       const result = await runCommand(
-        'gh',
-        ['copilot', 'suggest', '-t', 'shell', prompt],
+        'copilot',
+        ['-p', prompt, '--allow-all-tools'],
         { cwd, timeout: 120000 }
       );
 
@@ -83,14 +57,13 @@ export class CopilotAdapter implements AIToolAdapter {
       // Construct the implementation prompt
       const prompt = this.buildImplementationPrompt(context);
       
-      // Use gh copilot with the prompt directly
+      // Use copilot CLI with prompt mode and auto-approve tools
       const result = await runCommandStreaming(
-        'gh',
-        ['copilot', prompt],
+        'copilot',
+        ['-p', prompt, '--allow-all-tools'],
         { 
           cwd: context.rootPath, 
           timeout: 300000, // 5 minutes
-          env: { ...process.env, GH_COPILOT_AUTO_APPROVE: 'true' },
         }
       );
 
@@ -114,15 +87,13 @@ export class CopilotAdapter implements AIToolAdapter {
     const startTime = Date.now();
     
     try {
-      // Use gh copilot with the prompt directly (not suggest mode)
-      // This invokes the agent with auto-approval of tool usage
+      // Use copilot CLI with prompt mode and auto-approve all tools
       const result = await runCommandStreaming(
-        'gh',
-        ['copilot', prompt],
+        'copilot',
+        ['-p', prompt, '--allow-all-tools'],
         { 
           cwd, 
           timeout: 600000, // 10 minutes for complex operations
-          env: { ...process.env, GH_COPILOT_AUTO_APPROVE: 'true' },
         }
       );
 
