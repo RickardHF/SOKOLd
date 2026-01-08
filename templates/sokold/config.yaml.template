@@ -1,0 +1,27 @@
+# {{PROJECT_NAME}} Sokold Configuration
+
+# Sokold AI-powered code generation configuration
+# Generated: {{DATE}}
+# Version: {{VERSION}}
+
+project:
+  name: {{PROJECT_NAME}}
+  language: {{LANGUAGE}}
+  framework: {{FRAMEWORK}}
+
+# Prompt templates location
+prompts:
+  directory: prompts
+  default: default.md
+
+# Code generation settings
+generation:
+  style: idiomatic
+  comments: minimal
+  tests: alongside
+
+# Output settings
+output:
+  format: human
+  verbose: false
+  colors: true

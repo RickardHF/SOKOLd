@@ -2,6 +2,7 @@
   "name": "sokold",
   "version": "1.0.0",
   "description": "AI-powered code generation CLI - transform natural language descriptions into working code",
+  "type": "module",
   "main": "dist/main.js",
   "bin": {
     "sokold": "./bin/sokold.js"

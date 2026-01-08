@@ -170,3 +170,57 @@ export async function findSpecKitRoot(startPath: string): Promise<string | null>
   }
   return null;
 }
+
+/**
+ * Find Sokold root directory (.sokold folder)
+ */
+export async function findSokoldRoot(startPath: string): Promise<string | null> {
+  let currentPath = resolvePath(startPath);
+  const root = path.parse(currentPath).root;
+
+  while (currentPath !== root) {
+    const sokoldPath = joinPath(currentPath, '.sokold');
+    if (await pathExists(sokoldPath)) {
+      return currentPath;
+    }
+    currentPath = dirname(currentPath);
+  }
+  return null;
+}
+
+/**
+ * Compute content hash for file comparison (simple string hash)
+ */
+export function contentHash(content: string): string {
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return hash.toString(16);
+}
+
+/**
+ * Check if file content matches expected content
+ */
+export async function fileContentMatches(filePath: string, expectedContent: string): Promise<boolean> {
+  try {
+    const existingContent = await readFile(filePath);
+    return contentHash(existingContent) === contentHash(expectedContent);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Create backup of a file
+ */
+export async function createBackup(filePath: string): Promise<string | null> {
+  if (!(await pathExists(filePath))) {
+    return null;
+  }
+  const backupPath = `${filePath}.backup.${Date.now()}`;
+  await copy(filePath, backupPath);
+  return backupPath;
+}

@@ -1,0 +1,26 @@
+# {{PROJECT_NAME}} Configuration
+
+# Speckit configuration file
+# Generated: {{DATE}}
+# Version: {{VERSION}}
+
+project:
+  name: {{PROJECT_NAME}}
+  language: {{LANGUAGE}}
+  framework: {{FRAMEWORK}}
+
+# Specification templates location
+templates:
+  spec: templates/spec-template.md
+  plan: templates/plan-template.md
+  tasks: templates/tasks-template.md
+
+# Feature specifications directory
+specs:
+  directory: specs
+  pattern: "{id}-{slug}"
+
+# AI integration settings
+ai:
+  enabled: true
+  provider: copilot

@@ -123,6 +123,135 @@ export class NotInitializedError extends SpecKitError {
   }
 }
 
+// Setup feature error classes
+export class PermissionError extends SpecKitError {
+  constructor(path: string) {
+    super(
+      `Permission denied: ${path}`,
+      ExitCode.CONFIGURATION_ERROR,
+      `Cannot access or modify: ${path}`,
+      ['Check file/directory permissions', 'Run with elevated privileges if needed', 'Ensure the path is not read-only']
+    );
+    this.name = 'PermissionError';
+  }
+}
+
+export class CorruptionError extends SpecKitError {
+  public readonly filePath: string;
+  
+  constructor(path: string, details?: string) {
+    super(
+      `Configuration corrupted at ${path}`,
+      ExitCode.CONFIGURATION_ERROR,
+      details,
+      ['Backup and delete the corrupted file', 'Run setup again to recreate', 'Check for valid YAML/JSON syntax']
+    );
+    this.name = 'CorruptionError';
+    this.filePath = path;
+  }
+}
+
+export class AmbiguityError extends SpecKitError {
+  public readonly options: string[];
+  
+  constructor(message: string, options: string[]) {
+    super(
+      message,
+      ExitCode.CONFIGURATION_ERROR,
+      `Detected options: ${options.join(', ')}`,
+      ['Specify --language to set primary language', 'Specify --framework to set framework', 'Review detected options and choose one']
+    );
+    this.name = 'AmbiguityError';
+    this.options = options;
+  }
+}
+
+export class SetupValidationError extends SpecKitError {
+  public readonly validationErrors: string[];
+  
+  constructor(message: string, errors: string[]) {
+    super(
+      message,
+      ExitCode.CONFIGURATION_ERROR,
+      errors.join('\n'),
+      ['Fix validation errors listed above', 'Use --skip-validation to bypass', 'Check configuration file syntax']
+    );
+    this.name = 'SetupValidationError';
+    this.validationErrors = errors;
+  }
+}
+
+export class InvalidPathError extends SpecKitError {
+  constructor(path: string) {
+    super(
+      `Invalid path: ${path}`,
+      ExitCode.CONFIGURATION_ERROR,
+      'Path does not exist or is not accessible',
+      ['Verify the path exists', 'Check spelling and permissions', 'Use absolute paths for clarity']
+    );
+    this.name = 'InvalidPathError';
+  }
+}
+
+export class NoSourceFilesError extends SpecKitError {
+  constructor(path: string) {
+    super(
+      `No source files found in: ${path}`,
+      ExitCode.CONFIGURATION_ERROR,
+      'Repository appears to be empty or contains no recognized source files',
+      ['Add source files to the repository', 'Use --description to provide project info', 'Check if files are in excluded directories']
+    );
+    this.name = 'NoSourceFilesError';
+  }
+}
+
+export class TemplateNotFoundError extends SpecKitError {
+  constructor(templatePath: string) {
+    super(
+      `Template not found: ${templatePath}`,
+      ExitCode.CONFIGURATION_ERROR,
+      'Required template file is missing',
+      ['Reinstall sokold to restore templates', 'Check template directory structure', 'Verify installation integrity']
+    );
+    this.name = 'TemplateNotFoundError';
+  }
+}
+
+export class FileExistsError extends SpecKitError {
+  constructor(path: string) {
+    super(
+      `File already exists: ${path}`,
+      ExitCode.CONFIGURATION_ERROR,
+      'Cannot overwrite existing file without --force flag',
+      ['Use --force to overwrite', 'Backup and remove the file manually', 'Check if file needs to be preserved']
+    );
+    this.name = 'FileExistsError';
+  }
+}
+
+/**
+ * Setup-specific exit codes mapping
+ */
+export const SetupExitCodes = {
+  SUCCESS: 0,
+  PERMISSION: 1,
+  CORRUPTION: 2,
+  AMBIGUITY: 3,
+  NETWORK: 4,
+  VALIDATION: 5
+} as const;
+
+/**
+ * Get exit code for a setup error type
+ */
+export function getSetupExitCode(error: Error): number {
+  if (error instanceof PermissionError) return SetupExitCodes.PERMISSION;
+  if (error instanceof CorruptionError) return SetupExitCodes.CORRUPTION;
+  if (error instanceof AmbiguityError) return SetupExitCodes.AMBIGUITY;
+  if (error instanceof SetupValidationError) return SetupExitCodes.VALIDATION;
+  return 1;
+}
+
 /**
  * Handle error and exit with appropriate code
  */

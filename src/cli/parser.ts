@@ -8,6 +8,7 @@ import { createImplementCommand } from './commands/ImplementCommand.js';
 import { createStatusCommand } from './commands/StatusCommand.js';
 import { createResetCommand } from './commands/ResetCommand.js';
 import { createDoctorCommand } from './commands/DoctorCommand.js';
+import { createSetupCommand } from './commands/SetupCommand.js';
 import { defaultAction } from './commands/DefaultCommand.js';
 
 const VERSION = '1.0.0';
@@ -53,6 +54,7 @@ program
   .action(defaultAction);
 
 // Register subcommands (for advanced usage)
+program.addCommand(createSetupCommand());
 program.addCommand(createConfigCommand());
 program.addCommand(createStatusCommand());
 program.addCommand(createDoctorCommand());
