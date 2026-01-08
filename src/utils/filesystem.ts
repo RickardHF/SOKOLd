@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as os from 'os';
-import * as fs from 'fs-extra';
+import * as nodeFs from 'fs/promises';
+import fsExtra from 'fs-extra';
 
 /**
  * Cross-platform path utilities
@@ -67,7 +68,7 @@ export function getDataDir(): string {
  * Check if a path exists
  */
 export async function pathExists(filePath: string): Promise<boolean> {
-  return fs.pathExists(filePath);
+  return fsExtra.pathExists(filePath);
 }
 
 /**
@@ -75,7 +76,7 @@ export async function pathExists(filePath: string): Promise<boolean> {
  */
 export async function isDirectory(filePath: string): Promise<boolean> {
   try {
-    const stat = await fs.stat(filePath);
+    const stat = await nodeFs.stat(filePath);
     return stat.isDirectory();
   } catch {
     return false;
@@ -87,7 +88,7 @@ export async function isDirectory(filePath: string): Promise<boolean> {
  */
 export async function isFile(filePath: string): Promise<boolean> {
   try {
-    const stat = await fs.stat(filePath);
+    const stat = await nodeFs.stat(filePath);
     return stat.isFile();
   } catch {
     return false;
@@ -98,43 +99,43 @@ export async function isFile(filePath: string): Promise<boolean> {
  * Ensure directory exists
  */
 export async function ensureDir(dirPath: string): Promise<void> {
-  await fs.ensureDir(dirPath);
+  await fsExtra.ensureDir(dirPath);
 }
 
 /**
  * Read file contents
  */
 export async function readFile(filePath: string): Promise<string> {
-  return fs.readFile(filePath, 'utf-8');
+  return nodeFs.readFile(filePath, 'utf-8');
 }
 
 /**
  * Write file contents
  */
 export async function writeFile(filePath: string, content: string): Promise<void> {
-  await fs.ensureDir(path.dirname(filePath));
-  await fs.writeFile(filePath, content, 'utf-8');
+  await fsExtra.ensureDir(path.dirname(filePath));
+  await nodeFs.writeFile(filePath, content, 'utf-8');
 }
 
 /**
  * Copy file or directory
  */
 export async function copy(src: string, dest: string): Promise<void> {
-  await fs.copy(src, dest);
+  await fsExtra.copy(src, dest);
 }
 
 /**
  * Remove file or directory
  */
 export async function remove(filePath: string): Promise<void> {
-  await fs.remove(filePath);
+  await fsExtra.remove(filePath);
 }
 
 /**
  * Read directory contents
  */
 export async function readDir(dirPath: string): Promise<string[]> {
-  return fs.readdir(dirPath);
+  return nodeFs.readdir(dirPath);
 }
 
 /**
