@@ -291,12 +291,13 @@ export class PipelineOrchestrator {
     if (!this.aiAdapter) throw new Error('AI adapter not initialized');
     
     this.logger.verbose('Generating feature specification...');
-    
-    const { promises: fs } = await import('fs');
-    const path = await import('path');
-    
     // Use AI adapter for content generation
-    const prompt = `Create a detailed feature specification based on this request: "${description}".
+    const prompt = `/speckit.specify
+
+User Prompt:
+"${description}".
+
+Consider existing specifications if any.
     
 Include these sections:
 - Feature title and overview
@@ -307,15 +308,10 @@ Include these sections:
 
 Format as markdown. Be specific and actionable.`;
     
-    const result = await this.aiAdapter.suggest(prompt, this.rootPath);
+    const result = await this.aiAdapter.runWithAutoApprove(prompt, this.rootPath);
     if (!result.success) {
       throw new Error(`Failed to generate specification: ${result.error}`);
     }
-    
-    // Save to specs/main/spec.md
-    const specDir = path.join(this.rootPath, 'specs', 'main');
-    await fs.mkdir(specDir, { recursive: true });
-    await fs.writeFile(path.join(specDir, 'spec.md'), result.output, 'utf-8');
     
     this.logger.verbose('Specification saved to specs/main/spec.md');
   }
@@ -328,34 +324,13 @@ Format as markdown. Be specific and actionable.`;
     
     this.logger.verbose('Creating implementation plan...');
     
-    const { promises: fs } = await import('fs');
-    const path = await import('path');
-    
-    // Read the current spec
-    const specPath = path.join(this.rootPath, 'specs', 'main', 'spec.md');
-    const specContent = await fs.readFile(specPath, 'utf-8');
-    
     // Ask AI to create implementation plan
-    const prompt = `Based on this specification, create a detailed implementation plan:
-
-${specContent}
-
-Create a plan with:
-- Architecture/design decisions
-- Component breakdown
-- Data models
-- API contracts if applicable
-- Testing strategy
-
-Format as markdown.`;
+    const prompt = `/speckit.plan`;
     
-    const result = await this.aiAdapter.suggest(prompt, this.rootPath);
+    const result = await this.aiAdapter.runWithAutoApprove(prompt, this.rootPath);
     if (!result.success) {
       throw new Error(`Failed to generate plan: ${result.error}`);
     }
-    
-    // Save to specs/main/plan.md
-    await fs.writeFile(path.join(this.rootPath, 'specs', 'main', 'plan.md'), result.output, 'utf-8');
     
     this.logger.verbose('Plan saved to specs/main/plan.md');
   }
@@ -368,38 +343,15 @@ Format as markdown.`;
     
     this.logger.verbose('Breaking down into tasks...');
     
-    const { promises: fs } = await import('fs');
-    const path = await import('path');
-    
-    // Read spec
-    const specPath = path.join(this.rootPath, 'specs', 'main', 'spec.md');
-    const specContent = await fs.readFile(specPath, 'utf-8');
-    
     // Ask AI to create task list
-    const prompt = `Based on this spec, create a list of actionable implementation tasks:
-
-SPEC:
-${specContent}
-
-Generate a numbered task list in markdown format. Each task should be:
-- Specific and actionable
-- Include file names/paths where relevant
-- Ordered by dependency
-- Testable
-
-Format as:
-## Tasks
-1. [Task description]
-2. [Task description]
-...`;
+    const prompt = `/speckit.tasks`;
     
-    const result = await this.aiAdapter.suggest(prompt, this.rootPath);
+    const result = await this.aiAdapter.runWithAutoApprove(prompt, this.rootPath);
     if (!result.success) {
       throw new Error(`Failed to generate tasks: ${result.error}`);
     }
     
-    // Save to specs/main/tasks.md
-    await fs.writeFile(path.join(this.rootPath, 'specs', 'main', 'tasks.md'), result.output, 'utf-8');
+    this.logger.verbose(result.output);
     
     this.logger.verbose('Tasks saved to specs/main/tasks.md');
   }
