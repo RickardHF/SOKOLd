@@ -107,7 +107,7 @@ function restoreFromBackup(filePath: string): boolean {
  */
 function patchPowerShellScripts(scriptsDir: string): PatchResult {
   const details: string[] = [];
-  let allSuccess = true;
+  const allSuccess = true;
 
   // Patch create-new-feature.ps1
   const createFeaturePath = join(scriptsDir, 'create-new-feature.ps1');
@@ -216,7 +216,7 @@ if ($skipBranch) {
  */
 function patchBashScripts(scriptsDir: string): PatchResult {
   const details: string[] = [];
-  let allSuccess = true;
+  const allSuccess = true;
 
   // Patch create-new-feature.sh
   const createFeaturePath = join(scriptsDir, 'create-new-feature.sh');
