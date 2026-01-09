@@ -124,30 +124,67 @@ function patchPowerShellScripts(scriptsDir: string): PatchResult {
       );
     }
     
-    // Modify the git checkout block - find and replace
-    const gitCheckoutPattern = /if \(\$hasGit\) \{\s*try \{\s*git checkout -b \$branchName/;
-    if (gitCheckoutPattern.test(content)) {
+    // Patch the featureDir creation to use current branch when in current-branch-only mode
+    // This handles scripts that don't do git checkout but still create numbered directories
+    const featureDirPattern = /\$featureDir = Join-Path \$specsDir \$branchName\s*\nNew-Item -ItemType Directory/;
+    if (featureDirPattern.test(content)) {
       content = content.replace(
-        gitCheckoutPattern,
+        featureDirPattern,
         `${PATCH_MARKER_START}
-# Check if branch creation should be skipped
+# Check if we should use current branch instead of creating numbered directory
 $skipBranch = $NoBranch -or ($env:SOKOLD_CURRENT_BRANCH_ONLY -eq 'true')
 if ($skipBranch) {
-    Write-Output "[specify] Info: Skipping branch creation (--no-branch or SOKOLD_CURRENT_BRANCH_ONLY)"
+    # Get current branch name (or fallback to 'main')
+    try {
+        $currentBranch = git rev-parse --abbrev-ref HEAD 2>$null
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($currentBranch)) {
+            $currentBranch = "main"
+        }
+    } catch {
+        $currentBranch = "main"
+    }
+    Write-Output "[specify] Info: Current-branch-only mode - using specs/$currentBranch/ directory"
+    $branchName = $currentBranch
+}
+${PATCH_MARKER_END}
+$featureDir = Join-Path $specsDir $branchName
+New-Item -ItemType Directory`
+      );
+      details.push('✓ Patched create-new-feature.ps1 (directory creation)');
+    } else {
+      // Try to find git checkout pattern (older script versions)
+      const gitCheckoutPattern = /if \(\$hasGit\) \{\s*try \{\s*git checkout -b \$branchName/;
+      if (gitCheckoutPattern.test(content)) {
+        content = content.replace(
+          gitCheckoutPattern,
+          `${PATCH_MARKER_START}
+# Check if branch/folder creation should be skipped (current-branch-only mode)
+$skipBranch = $NoBranch -or ($env:SOKOLD_CURRENT_BRANCH_ONLY -eq 'true')
+if ($skipBranch) {
+    # Get current branch name
+    try {
+        $currentBranch = git rev-parse --abbrev-ref HEAD 2>$null
+        if ($LASTEXITCODE -ne 0) { $currentBranch = "main" }
+    } catch { $currentBranch = "main" }
+    Write-Output "[specify] Info: Current-branch-only mode - using specs/$currentBranch/ directory"
+    $branchName = $currentBranch
 } elseif ($hasGit) {
     try {
         git checkout -b $branchName`
-      );
-      
-      // Find the closing of the git checkout try-catch and add our closing
-      content = content.replace(
-        /(\s*\}\s*else\s*\{\s*Write-Warning "[^"]*Git repository not detected[^"]*"\s*\})/,
-        `$1\n${PATCH_MARKER_END}`
-      );
+        );
+        
+        // Find the closing and add marker
+        content = content.replace(
+          /(\s*\}\s*else\s*\{\s*Write-Warning "[^"]*Git repository not detected[^"]*"\s*\})/,
+          `$1\n${PATCH_MARKER_END}`
+        );
+        details.push('✓ Patched create-new-feature.ps1 (git checkout)');
+      } else {
+        details.push('⚠ Could not find patch point in create-new-feature.ps1');
+      }
     }
     
     writeFileSync(createFeaturePath, content, 'utf-8');
-    details.push('✓ Patched create-new-feature.ps1');
   } else if (isPatched(createFeaturePath)) {
     details.push('→ create-new-feature.ps1 already patched');
   }
