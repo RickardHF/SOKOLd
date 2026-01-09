@@ -29,6 +29,12 @@ export interface SokoldConfig {
     format: 'human' | 'json';
   };
   
+  /** Workflow settings */
+  workflow: {
+    /** Force all features to use current branch (no new branches/folders) */
+    currentBranchOnly: boolean;
+  };
+  
   /** Custom prompt templates directory */
   promptsDir?: string;
 }
@@ -41,6 +47,9 @@ const DEFAULT_CONFIG: SokoldConfig = {
   output: {
     colors: true,
     format: 'human',
+  },
+  workflow: {
+    currentBranchOnly: false,
   },
 };
 
@@ -85,6 +94,10 @@ export function loadConfig(rootPath: string = process.cwd()): SokoldConfig {
       output: {
         ...DEFAULT_CONFIG.output,
         ...loaded.output,
+      },
+      workflow: {
+        ...DEFAULT_CONFIG.workflow,
+        ...loaded.workflow,
       },
     };
   } catch {
@@ -218,6 +231,7 @@ export function getConfigKeys(): Record<string, string> {
     'verbose': 'Show verbose output during execution',
     'output.colors': 'Enable colored output',
     'output.format': 'Output format: human or json',
+    'workflow.currentBranchOnly': 'Force all features to use current branch (no new branches/folders)',
     'promptsDir': 'Custom prompt templates directory',
   };
 }
@@ -240,6 +254,7 @@ export function validateConfigValue(key: string, value: string): string | null {
     case 'autoApprove':
     case 'verbose':
     case 'output.colors':
+    case 'workflow.currentBranchOnly':
       if (!['true', 'false'].includes(value)) {
         return `Invalid value "${value}". Must be "true" or "false"`;
       }

@@ -12,3 +12,5 @@ verbose: false
 output:
   colors: true
   format: human
+workflow:
+  currentBranchOnly: true

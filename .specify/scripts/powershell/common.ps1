@@ -16,6 +16,11 @@ function Get-RepoRoot {
 }
 
 function Get-CurrentBranch {
+    # Check if current-branch-only mode is enabled (always use 'main' for specs)
+    if ($env:SOKOLD_CURRENT_BRANCH_ONLY -eq 'true') {
+        return "main"
+    }
+    
     # First check if SPECIFY_FEATURE environment variable is set
     if ($env:SPECIFY_FEATURE) {
         return $env:SPECIFY_FEATURE
@@ -72,6 +77,12 @@ function Test-FeatureBranch {
         [string]$Branch,
         [bool]$HasGit = $true
     )
+    
+    # Check if current-branch-only mode is enabled (skip branch validation)
+    if ($env:SOKOLD_CURRENT_BRANCH_ONLY -eq 'true') {
+        Write-Output "[specify] Current-branch-only mode: skipping branch validation"
+        return $true
+    }
     
     # For non-git repos, we can't enforce branch naming but still provide output
     if (-not $HasGit) {

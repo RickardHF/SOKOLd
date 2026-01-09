@@ -112,12 +112,13 @@ Config Commands:
   sokold config path              Show config file path
 
 Config Keys:
-  tool          AI CLI tool: copilot or claude
-  model         Model to use (e.g., gpt-4, claude-3-opus)
-  autoApprove   Auto-approve tool calls (true/false)
-  verbose       Verbose output (true/false)
-  output.colors Enable colors (true/false)
-  output.format Output format: human or json
+  tool                       AI CLI tool: copilot or claude
+  model                      Model to use (e.g., gpt-4, claude-3-opus)
+  autoApprove                Auto-approve tool calls (true/false)
+  verbose                    Verbose output (true/false)
+  output.colors              Enable colors (true/false)
+  output.format              Output format: human or json
+  workflow.currentBranchOnly Force all features to current branch (true/false)
 
 Examples:
   sokold "Add user authentication with JWT tokens"
@@ -230,6 +231,7 @@ async function main(): Promise<void> {
   const tool = args.tool ?? config.tool;
   const model = args.model ?? config.model;
   const verbose = args.verbose ?? config.verbose;
+  const currentBranchOnly = config.workflow.currentBranchOnly;
   
   // Need either a description or --continue
   if (!args.description && !args.continue) {
@@ -243,6 +245,7 @@ async function main(): Promise<void> {
     model,
     verbose,
     autoApprove: config.autoApprove,
+    currentBranchOnly,
   });
 }
 

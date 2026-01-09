@@ -13,6 +13,7 @@ export interface PipelineOptions {
   model?: string;
   verbose?: boolean;
   autoApprove?: boolean;
+  currentBranchOnly?: boolean;
 }
 
 type Step = 'specify' | 'plan' | 'tasks' | 'implement';
@@ -74,6 +75,7 @@ export async function runPipeline(
       verbose: options.verbose,
       model: options.model,
       autoApprove: options.autoApprove ?? true,
+      currentBranchOnly: options.currentBranchOnly,
     });
     
     if (!success) {
@@ -126,6 +128,7 @@ interface RunOptions {
   verbose?: boolean;
   model?: string;
   autoApprove?: boolean;
+  currentBranchOnly?: boolean;
 }
 
 async function runAICommand(
@@ -159,10 +162,17 @@ async function runAICommand(
       console.log(`   $ ${fullCommand}`);
     }
 
+    // Set up environment with workflow options
+    const env = { ...process.env };
+    if (options.currentBranchOnly) {
+      env.SOKOLD_CURRENT_BRANCH_ONLY = 'true';
+    }
+
     const child = spawn(fullCommand, [], {
       cwd: process.cwd(),
       stdio: 'inherit', // Stream output directly to terminal
       shell: true,
+      env,
     });
 
     child.on('close', (code) => {
