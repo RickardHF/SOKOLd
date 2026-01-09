@@ -1,78 +1,39 @@
-# Implementation Plan: SpecKit Automation CLI
+# Implementation Plan: SOKOLd CLI Orchestrator
 
-**Branch**: `main` | **Date**: 2026-01-07 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `/specs/main/spec.md`
-
-**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
+**Branch**: `main` | **Date**: January 9, 2026 | **Spec**: [spec.md](spec.md)
+**Status**: Implemented - documenting existing architecture
 
 ## Summary
 
-Build a cross-platform CLI tool that automates the SpecKit workflow: initializes SpecKit structure in any repository, detects unimplemented feature specifications, orchestrates AI CLI tools (GitHub Copilot or Claude) with auto-approval to implement features, and automatically runs quality checks (tests, linting, builds) with AI-assisted fixes. The tool must work identically on Windows, macOS, and Linux with minimal dependencies and follow constitution principles for cross-platform compatibility, CLI-first design, and TDD.
+SOKOLd is a thin CLI orchestrator that delegates all work to AI CLI tools (copilot/claude) via spawn. The tool detects project state, initializes speckit if needed, runs speckit agents in sequence (specify → plan → tasks → implement), verifies implementation, and provides an execution summary. Architecture is intentionally minimal: 4 TypeScript files with clear separation of concerns.
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.x on Node.js 18.x LTS  
-**Primary Dependencies**: commander (CLI), execa (process), fs-extra (files), yaml (config), glob (patterns) - 6 minimal trusted libraries  
-**Storage**: File-based (YAML/JSON for config, JSON for state tracking, markdown for specs)  
-**Testing**: Jest 29.x with TypeScript support, mocking, cross-platform  
-**Target Platform**: Windows 10+, macOS 10.15+, Linux (major distros) - Node.js runtime required
-**Project Type**: single (CLI tool)  
-**Performance Goals**: Init command <10 sec, feature detection <5 sec, responsive feedback during implementation
-**Constraints**: Zero platform-specific features, works offline (except AI CLI calls), <50MB memory footprint, npm distribution + optional standalone binaries
-**Scale/Scope**: Handle repos with 100+ feature specs, 10k+ files, concurrent quality checks
+**Language/Version**: TypeScript 5.x, Node.js 18+  
+**Primary Dependencies**: yaml (config parsing), Node.js built-ins (spawn, fs, path)  
+**Storage**: YAML config in `.sokold/config.yaml`  
+**Testing**: Jest with ts-jest  
+**Target Platform**: Cross-platform CLI (Windows, macOS, Linux)  
+**Project Type**: Single project (CLI tool)  
+**Performance Goals**: Minimal overhead - spawn AI CLI and wait for completion  
+**Constraints**: 4-file architecture maximum, no direct file manipulation beyond config  
+**Scale/Scope**: Single-user CLI tool, local development workflows
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+*GATE: Verified against constitution v1.0.1*
 
-### I. Cross-Platform Compatibility ✅
-- **Requirement**: Tool MUST run on Windows, macOS, Linux without feature limitations
-- **Status**: PASS - Spec explicitly requires cross-platform design, language choice will enforce this
-- **Evidence**: Requirements FR-001 through FR-020 make no platform-specific assumptions
+| Principle | Status | Implementation |
+|-----------|--------|----------------|
+| I. Cross-Platform | ✅ | Uses `path.join()`, Node.js cross-platform APIs |
+| II. CLI-First | ✅ | POSIX conventions, exit codes, stdout/stderr separation |
+| III. Test-Driven | ✅ | Jest test structure in place |
+| IV. Distribution | ✅ | npm package with bin entry in package.json |
+| V. Observability | ✅ | --verbose flag, emoji status output, clear error messages |
+| VI. Versioning | ✅ | CHANGELOG.md exists, semver in package.json |
+| VII. Simplicity | ✅ | 4-file architecture, delegates to AI CLI |
 
-### II. CLI-First Design ✅
-- **Requirement**: All functionality via CLI with POSIX conventions, JSON output support
-- **Status**: PASS - Tool is inherently CLI-based, spec requires stdin/stdout/stderr handling
-- **Evidence**: FR-009 (auto-approval), FR-020 (non-interactive mode), SC-007 (CI/CD compatibility)
-
-### III. Test-Driven Development ✅
-- **Requirement**: Tests written before implementation, Red-Green-Refactor mandatory
-- **Status**: PASS - Will be enforced during task creation and implementation
-- **Evidence**: All user stories include "Independent Test" criteria, constitution requirement acknowledged
-
-### IV. Distribution & Packaging ✅
-- **Requirement**: Installable via package manager, standalone binaries, simple installation
-- **Status**: PASS - npm distribution confirmed, optional binaries via pkg/nexe
-- **Evidence**: Research phase established npm as primary, binaries as secondary option
-- **Decision**: `npm install -g speckit-automate` for primary distribution
-
-### V. Observability & Debugging ✅
-- **Requirement**: Structured logging, --verbose/--quiet/--debug flags, actionable errors
-- **Status**: PASS - Spec requires error handling and reporting
-- **Evidence**: FR-013 (capture failures), FR-018 (execution reports), FR-019 (clear error messages)
-
-### VI. Versioning & Stability ✅
-- **Requirement**: Semantic versioning, changelog, migration guides for breaking changes
-- **Status**: PASS - Standard practice, no conflicts with spec
-- **Evidence**: Tool will version itself and track SpecKit compatibility
-
-### VII. Simplicity & Best Practices ✅
-- **Requirement**: YAGNI, standard library over dependencies, conventional config
-- **Status**: PASS - User explicitly requested "minimal libraries"
-- **Evidence**: Spec emphasizes simplicity, Technical Context constrains dependencies
-
-**Gate Result**: ✅ PASS - All requirements satisfied
-
-**Final Evaluation** (Post Phase 1):
-- All 7 constitution principles addressed
-- TypeScript/Node.js selection ensures cross-platform compatibility
-- CLI-first design with comprehensive command contracts
-- TDD enforced through implementation workflow
-- npm packaging with optional standalone binaries
-- Structured logging and error handling designed
-- Semantic versioning and simplicity principles maintained
-
-**No violations or exceptions required.**
+**No violations requiring justification.**
 
 ## Project Structure
 
@@ -80,59 +41,141 @@ Build a cross-platform CLI tool that automates the SpecKit workflow: initializes
 
 ```text
 specs/main/
-├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
-│   └── cli-interface.md # Command-line interface contracts
-└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+├── spec.md              # Feature specification
+├── plan.md              # This file
+├── research.md          # Technical research (N/A - straightforward implementation)
+├── data-model.md        # Data entities and types
+├── quickstart.md        # Getting started guide
+├── contracts/           # Interface definitions
+│   └── cli-interface.md # CLI command contracts
+├── checklists/
+│   └── requirements.md  # Spec quality checklist
+└── tasks.md             # Implementation tasks (future)
 ```
 
 ### Source Code (repository root)
 
 ```text
 src/
-├── cli/                 # Command-line interface and argument parsing
-│   ├── commands/        # Individual command implementations (init, implement, etc.)
-│   └── parser.{ext}     # CLI argument parser and help text
-├── core/                # Core business logic
-│   ├── speckit/         # SpecKit initialization and detection
-│   ├── scanner/         # Feature spec scanner and status detector
-│   ├── orchestrator/    # AI CLI tool orchestration
-│   └── quality/         # Test/lint/build runner and result parser
-├── adapters/            # External tool adapters
-│   ├── ai/              # AI CLI tool adapters (Copilot, Claude)
-│   └── tooling/         # Build/test/lint tool detection and execution
-├── utils/               # Cross-platform utilities
-│   ├── filesystem.{ext} # Path handling, file operations
-│   ├── process.{ext}    # Process spawning, output capture
-│   └── config.{ext}     # Configuration file management
-└── main.{ext}           # Entry point
+├── cli.ts       # Entry point, argument parsing, help display
+├── pipeline.ts  # Main orchestration - runs AI CLI via spawn
+├── detect.ts    # Project state detection (.specify, specs/, etc.)
+└── config.ts    # YAML configuration management
+
+bin/
+└── sokold.js    # npm bin entry point (shebang wrapper)
 
 tests/
-├── unit/                # Unit tests for individual modules
-├── integration/         # Integration tests for command flows
-└── fixtures/            # Test data (sample specs, configs, etc.)
-
-templates/               # Embedded SpecKit templates for initialization
-├── constitution.md
-├── plan-template.md
-├── spec-template.md
-└── ...
+├── contract/    # Contract tests
+├── integration/ # Integration tests
+│   └── setup/
+└── unit/        # Unit tests
+    ├── setup/
+    └── state/
 ```
 
-**Structure Decision**: Single project structure chosen as this is a standalone CLI tool. Language-specific file extensions ({ext}) will be determined in Phase 0 research. The `templates/` directory embeds SpecKit templates to enable initialization in any repository without external dependencies.
+**Structure Decision**: Single project with flat `src/` directory. Each file has a single responsibility. No subdirectories needed given 4-file constraint.
+
+## Component Design
+
+### cli.ts - Entry Point
+
+**Responsibility**: Parse arguments, route to appropriate handler (help, config, or pipeline)
+
+**Exports**:
+- `parseArgs(argv: string[]): Args` - Parse command-line arguments
+- `showHelp(): void` - Display usage information
+- `handleConfigCommand(args: Args): void` - Handle config subcommands
+
+**Key behaviors**:
+- `sokold "description"` → calls `runPipeline(description)`
+- `sokold --help` → calls `showHelp()`
+- `sokold set/get <key> [value]` → shorthand for config commands
+- `sokold config list/get/set/path` → config management
+
+### pipeline.ts - Orchestration
+
+**Responsibility**: Execute speckit workflow via AI CLI
+
+**Exports**:
+- `runPipeline(description: string | undefined, options: PipelineOptions): Promise<void>`
+
+**Flow**:
+1. `detectProject()` → check current state
+2. If no `.specify/` → `runSpecifyInit()` via spawn
+3. Determine steps based on state and description
+4. For each step: spawn `<tool> -p "/<agent> <prompt>"`
+5. After implement: `runVerification()` loop (max 3 retries)
+6. `printSummary()` → show execution results
+
+**Types**:
+```typescript
+type Step = 'init' | 'specify' | 'plan' | 'tasks' | 'implement' | 'verify';
+interface PipelineOptions { dryRun?, tool?, model?, verbose?, autoApprove?, maxRetries? }
+interface ExecutionSummary { stepsCompleted[], stepsFailed[], fixAttempts, startTime, endTime? }
+```
+
+### detect.ts - State Detection
+
+**Responsibility**: Check what speckit artifacts exist
+
+**Exports**:
+- `detectProject(rootPath?: string): ProjectStatus`
+- `getNextStep(status: ProjectStatus, hasDescription: boolean): string | null`
+
+**Types**:
+```typescript
+interface ProjectStatus {
+  hasSpeckit: boolean;  // .specify/ exists
+  hasSpecs: boolean;    // specs/ exists
+  hasSpec: boolean;     // specs/main/spec.md exists
+  hasPlan: boolean;     // specs/main/plan.md exists
+  hasTasks: boolean;    // specs/main/tasks.md exists
+}
+```
+
+### config.ts - Configuration
+
+**Responsibility**: Persist and retrieve user preferences
+
+**Exports**:
+- `loadConfig(rootPath?: string): SokoldConfig`
+- `saveConfig(config: SokoldConfig, rootPath?: string): void`
+- `getConfigValue(key: string, rootPath?: string): unknown`
+- `setConfigValue(key: string, value: unknown, rootPath?: string): void`
+- `listConfig(rootPath?: string): void`
+- `getConfigPath(rootPath?: string): string`
+
+**Types**:
+```typescript
+interface SokoldConfig {
+  tool: 'copilot' | 'claude';
+  model?: string;
+  autoApprove: boolean;
+  verbose: boolean;
+  output: { colors: boolean; format: 'human' | 'json' };
+  workflow: { currentBranchOnly: boolean };
+}
+```
+
+**Storage**: `.sokold/config.yaml`
 
 ## Complexity Tracking
 
-No constitution violations - complexity tracking not required at this stage. Will re-evaluate after Phase 1 design.
+> No violations - architecture meets simplicity requirements.
 
-## Complexity Tracking
+| Aspect | Decision | Rationale |
+|--------|----------|-----------|
+| File count | 4 files | Minimum viable separation of concerns |
+| Dependencies | yaml only | Avoid bloat, use Node.js built-ins |
+| State management | None | Stateless - detect from filesystem |
+| File manipulation | Delegated | AI CLI handles all file operations |
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
+## Phase Outputs
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+Since this documents an existing implementation:
+
+- **research.md**: Not needed - implementation is straightforward
+- **data-model.md**: Will document TypeScript interfaces
+- **quickstart.md**: Will document usage for new users
+- **contracts/cli-interface.md**: Will document CLI command structure

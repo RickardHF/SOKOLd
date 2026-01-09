@@ -1,177 +1,111 @@
-# Feature Specification: SoKolD - AI-Powered Code Generation CLI
+# Feature Specification: SOKOLd CLI Orchestrator
 
-**Feature Branch**: `master`  
-**Created**: 2026-01-07  
-**Status**: Draft  
-**Input**: User description: "Build a CLI tool where the user simply describes what they want to build, and the tool handles everything automatically - from specification generation through implementation. SpecKit should be completely abstracted away from the user. The tool should use an intelligent orchestrator to decide what actions to perform, and leverage the preferred AI CLI tool (GitHub Copilot CLI or Claude) for implementation."
-
-## Overview
-
-SoKolD (pronounced "so cold") is a CLI tool that transforms natural language feature descriptions into working code. Users simply describe what they want, and SoKolD handles the entire pipeline: specification generation, planning, task breakdown, and implementation - all without requiring users to understand or interact with the underlying SpecKit framework.
-
-**CLI Name**: `sokold`
+**Feature Branch**: `main`  
+**Created**: January 9, 2026  
+**Status**: Implemented  
+**Input**: User description: "SOKOLd is a thin CLI orchestrator that runs AI CLI tools (copilot/claude) to execute speckit workflows. CLI command is 'sokold' (lowercase). Architecture: 4 files only - cli.ts (arg parsing, help), pipeline.ts (runs AI CLI via spawn to call speckit agents), detect.ts (checks if .specify exists), config.ts (yaml config). The tool delegates ALL work to the AI CLI - no internal file manipulation. Flow: detect project state -> if no speckit run 'specify init' -> run speckit agents (specify, plan, tasks, implement) -> verify via AI -> fix loop -> summary. Keep it simple per Constitution Principle VII."
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Natural Language Feature Creation (Priority: P1)
+### User Story 1 - Run Full Workflow from Scratch (Priority: P1)
 
-A developer wants to add a new feature to their project. They run a single command with a natural language description, and the tool automatically generates specifications, creates an implementation plan, breaks it into tasks, and implements the feature - all without any manual intervention.
+A developer has a new project idea. They want to go from a plain description to working code without manually running multiple commands. They type `sokold "Build a todo app with REST API"` and the tool handles everything: initializes speckit if needed, creates specifications, plans, tasks, implements, verifies, and reports results.
 
-**Why this priority**: This is the core value proposition - transforming ideas into code with a single command.
+**Why this priority**: This is the core value proposition - one command to orchestrate the entire speckit workflow.
 
-**Independent Test**: Run `sokold "Add a REST API endpoint for user authentication"`, verify that the tool creates specs, plans, tasks, and implements the feature automatically.
+**Independent Test**: Can be tested by running `sokold "any feature description"` in an empty directory and verifying the complete workflow executes end-to-end.
 
 **Acceptance Scenarios**:
 
-1. **Given** a project directory, **When** user runs `sokold "Add user login with JWT"`, **Then** tool automatically initializes SpecKit (if needed), generates spec, plan, tasks, and implements the feature
-2. **Given** user provides a feature description, **When** orchestrator analyzes the request, **Then** it determines the optimal sequence of actions (specify → plan → tasks → implement)
-3. **Given** implementation completes, **When** quality checks fail, **Then** tool automatically fixes issues without user intervention
-4. **Given** no configuration exists, **When** tool first runs, **Then** it auto-detects available AI tools and creates default configuration silently
+1. **Given** a directory without `.specify/` folder, **When** user runs `sokold "feature description"`, **Then** speckit is initialized first via `specify init`, then the full workflow runs
+2. **Given** a directory with `.specify/` already present, **When** user runs `sokold "feature description"`, **Then** workflow runs without re-initializing speckit
+3. **Given** any project state, **When** workflow completes, **Then** user sees a summary of what was done (steps completed, files created/modified)
 
 ---
 
-### User Story 2 - Intelligent Action Orchestration (Priority: P1)
+### User Story 2 - Configure AI Tool (Priority: P2)
 
-The tool uses an intelligent orchestrator that analyzes the current project state and user request to determine what actions are needed. It doesn't blindly run all steps - it assesses what's already done and what's needed.
+A developer prefers using Claude over Copilot (or vice versa). They want to set their preferred AI tool once and have sokold use it for all future runs.
 
-**Why this priority**: Smart orchestration prevents redundant work and enables the tool to handle various scenarios (new features, continuing work, fixing issues).
+**Why this priority**: Tool flexibility is important but secondary to core workflow functionality.
 
-**Independent Test**: Run `sokold` on a project with partial specs - verify orchestrator detects existing work and continues from the appropriate step.
+**Independent Test**: Can be tested by running `sokold set tool claude`, then `sokold get tool` to verify, then running workflow to confirm correct tool is used.
 
 **Acceptance Scenarios**:
 
-1. **Given** a new feature request, **When** orchestrator runs, **Then** it executes: init → specify → plan → tasks → implement
-2. **Given** specs exist but no plan, **When** orchestrator runs, **Then** it skips specify and executes: plan → tasks → implement
-3. **Given** tasks exist but implementation failed, **When** user runs `sokold --continue`, **Then** orchestrator resumes implementation from last checkpoint
-4. **Given** user runs `sokold status`, **When** orchestrator analyzes state, **Then** it reports what's done, what's pending, and recommended next action
+1. **Given** default configuration, **When** user runs `sokold set tool claude`, **Then** configuration is saved to `.sokold/config.yaml`
+2. **Given** configuration exists, **When** user runs `sokold get tool`, **Then** current tool setting is displayed
+3. **Given** tool is set to `claude`, **When** user runs workflow, **Then** `claude` CLI is invoked instead of `copilot`
 
 ---
 
-### User Story 3 - Zero-Configuration First Run (Priority: P1)
+### User Story 3 - Get Help (Priority: P3)
 
-When a user runs SoKolD for the first time, the tool automatically sets up everything needed - detecting available AI tools, creating configuration, and initializing the project structure. No manual setup required.
+A new user wants to understand what commands are available and how to use sokold.
 
-**Why this priority**: Removing friction from first use is critical for adoption.
+**Why this priority**: Discoverability is helpful but users can also read documentation.
 
-**Independent Test**: Run `sokold "Create a hello world CLI"` in a new directory with no prior setup, verify everything initializes automatically.
-
-**Acceptance Scenarios**:
-
-1. **Given** no `.sokold.yaml` config exists, **When** tool runs, **Then** it auto-detects AI tools and creates config with sensible defaults
-2. **Given** no SpecKit structure exists, **When** tool runs, **Then** it silently initializes SpecKit without user prompts
-3. **Given** both Copilot and Claude are installed, **When** no preference is set, **Then** tool uses Copilot as default (or first available)
-4. **Given** no AI tools are installed, **When** tool runs, **Then** it provides clear installation instructions and exits gracefully
-
----
-
-### User Story 4 - Automated Quality Assurance (Priority: P2)
-
-After implementation, the tool automatically runs tests, linting, and builds. When failures occur, it uses the AI CLI to fix issues iteratively until all checks pass or retry limits are reached.
-
-**Why this priority**: Ensures generated code actually works without manual debugging.
+**Independent Test**: Can be tested by running `sokold --help` or `sokold` with no arguments and verifying helpful output appears.
 
 **Acceptance Scenarios**:
 
-1. **Given** implementation completes, **When** tests fail, **Then** tool automatically invokes AI to fix and re-runs tests
-2. **Given** linting errors exist, **When** detected, **Then** tool auto-fixes using AI CLI
-3. **Given** build fails, **When** error is captured, **Then** tool passes context to AI for resolution
-4. **Given** max retries exceeded, **When** issues persist, **Then** tool reports failures and suggests manual review
-
----
-
-### User Story 5 - Advanced Commands for Power Users (Priority: P3)
-
-Power users who want more control can access individual steps of the pipeline or inspect/manage configuration.
-
-**Why this priority**: Provides escape hatches without cluttering the primary experience.
-
-**Acceptance Scenarios**:
-
-1. **Given** user runs `sokold config show`, **Then** current configuration is displayed
-2. **Given** user runs `sokold config set aiTool claude`, **Then** preference is saved
-3. **Given** user runs `sokold doctor`, **Then** system health and setup issues are reported
-4. **Given** user runs `sokold status`, **Then** implementation progress is shown
+1. **Given** any state, **When** user runs `sokold --help`, **Then** help text displays available commands and usage
+2. **Given** any state, **When** user runs `sokold` with no arguments, **Then** help text is displayed
+3. **Given** any state, **When** user runs `sokold set --help`, **Then** config subcommand help is displayed
 
 ---
 
 ### Edge Cases
 
-- What happens when the user's description is too vague?
-  - Orchestrator uses AI to ask clarifying questions or makes reasonable assumptions
-  - Generated spec can be reviewed before implementation with `--review` flag
-
-- What happens mid-implementation if the user cancels?
-  - State is saved to allow resumption with `sokold --continue`
-  - Partial work is preserved, not rolled back
-
-- What if the project has no build/test commands?
-  - Tool detects project type and uses sensible defaults
-  - Skips checks that don't apply (no tests = no test run)
-
-- What if SpecKit agents fail?
-  - Tool retries with exponential backoff
-  - Falls back to simpler prompts if complex ones fail
-  - Reports which step failed for debugging
+- What happens when AI CLI (copilot/claude) is not installed? → Display clear error message with installation instructions
+- What happens when speckit agents fail? → Report failure, show AI output, suggest retry
+- What happens when verification finds issues? → Automatically retry fix up to 3 times, then report remaining issues
+- What happens when user provides empty description? → Display help/usage instead of running workflow
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-**Core Pipeline**
-- **FR-001**: System MUST accept natural language feature descriptions as the primary input
-- **FR-002**: System MUST automatically initialize SpecKit structure on first run without user prompts
-- **FR-003**: System MUST auto-generate configuration file with detected AI tools on first run
-- **FR-004**: System MUST orchestrate the full pipeline: specify → plan → tasks → implement
-- **FR-005**: System MUST invoke SpecKit agents (speckit-specify, speckit-plan, speckit-tasks, speckit-implement) internally
-- **FR-006**: System MUST completely abstract SpecKit from the end user
-
-**Intelligent Orchestration**
-- **FR-007**: Orchestrator MUST analyze project state to determine required actions
-- **FR-008**: Orchestrator MUST skip steps that are already complete
-- **FR-009**: Orchestrator MUST support resumption from last checkpoint on failure
-- **FR-010**: Orchestrator MUST decide action sequence based on: existing specs, plans, tasks, and implementation status
-
-**AI Tool Integration**
-- **FR-011**: System MUST support GitHub Copilot CLI with auto-approve flags
-- **FR-012**: System MUST support Claude CLI with auto-approve flags
-- **FR-013**: System MUST auto-detect which AI tools are available
-- **FR-014**: System MUST use first available tool if no preference is set
-
-**Quality Assurance**
-- **FR-015**: System MUST automatically run tests after implementation
-- **FR-016**: System MUST automatically run linting after implementation
-- **FR-017**: System MUST automatically run build after implementation
-- **FR-018**: System MUST auto-fix failures using AI CLI with retry logic
-- **FR-019**: System MUST implement configurable retry limits (default 3)
-
-**State & Reporting**
-- **FR-020**: System MUST persist state to enable resumption
-- **FR-021**: System MUST provide status command showing implementation progress
-- **FR-022**: System MUST generate execution reports on completion
+- **FR-001**: System MUST provide a CLI command `sokold` as the entry point
+- **FR-002**: System MUST accept a feature description as a positional argument (e.g., `sokold "build a todo app"`)
+- **FR-003**: System MUST detect if `.specify/` folder exists in current directory
+- **FR-004**: System MUST run `specify init --here --ai <tool> --force` when `.specify/` is absent
+- **FR-005**: System MUST spawn the configured AI CLI tool (copilot or claude) with `-p` flag to invoke speckit agents
+- **FR-006**: System MUST run speckit agents in order: @speckit.specify → @speckit.plan → @speckit.tasks → @speckit.implement
+- **FR-007**: System MUST run verification after implementation via AI CLI
+- **FR-008**: System MUST retry fixes up to 3 times when verification finds issues
+- **FR-009**: System MUST display an execution summary showing steps completed and outcomes
+- **FR-010**: System MUST support `sokold set <key> <value>` to configure settings
+- **FR-011**: System MUST support `sokold get <key>` to display current settings
+- **FR-012**: System MUST store configuration in `.sokold/config.yaml`
+- **FR-013**: System MUST display help when run with `--help` flag or no arguments
+- **FR-014**: System MUST delegate ALL file manipulation to the AI CLI - no direct file operations
 
 ### Key Entities
 
-- **Orchestrator**: Central decision-maker that analyzes state and determines action sequence
-- **Pipeline Step**: Individual action (specify, plan, tasks, implement, quality-check)
-- **Project State**: Current status including existing specs, plans, tasks, implementation progress
-- **Configuration**: Auto-generated settings including AI tool preference, retry limits, check settings
-- **Execution Session**: Tracks one run including steps executed, results, and checkpoints
+- **Configuration**: User preferences stored in YAML (tool selection: copilot/claude)
+- **ProjectStatus**: Detection results (hasSpeckit, hasSpec, hasPlan, hasTasks)
+- **ExecutionSummary**: Record of workflow execution (steps completed, success/failure, duration)
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: Users can go from idea to implementation with a single command (`sokold "description"`)
-- **SC-002**: First-time setup requires zero manual configuration steps
-- **SC-003**: Tool correctly determines required actions 95% of the time based on project state
-- **SC-004**: Complete pipeline (specify → implement) completes in under 20 minutes for typical features
-- **SC-005**: Auto-fix resolves 70%+ of common quality check failures
-- **SC-006**: Resumption after failure works correctly, continuing from last checkpoint
-- **SC-007**: Users never need to directly invoke SpecKit commands
+- **SC-001**: Users can go from feature description to implemented code with a single command
+- **SC-002**: Complete workflow executes in the time it takes the AI to process (no added overhead beyond spawn)
+- **SC-003**: 100% of file operations are performed by AI CLI, not by sokold directly
+- **SC-004**: Configuration changes persist across sessions
+- **SC-005**: Users understand available commands within 30 seconds of reading help output
 
 ## Assumptions
 
-- Users have Node.js >= 18.0.0 installed
-- Users have GitHub Copilot CLI or Claude CLI installed and authenticated
-- Projects use standard tooling conventions (package.json, Cargo.toml, etc.)
-- SpecKit agents are available via the AI CLI tool's custom agents/extensions
+- User has Node.js 18+ installed
+- User has either `copilot` CLI or `claude` CLI installed and authenticated
+- User has `specify` CLI available (installed globally or via npx)
+- Project follows speckit conventions (specs in `specs/` directory)
+
+## Constraints
+
+- **Architecture constraint**: Maximum 4 source files (cli.ts, pipeline.ts, detect.ts, config.ts)
+- **Simplicity constraint**: Per Constitution Principle VII - favor simplicity over elaborate abstractions
+- **Delegation constraint**: SOKOLd is a thin orchestrator; all intelligence lives in AI CLI tools
