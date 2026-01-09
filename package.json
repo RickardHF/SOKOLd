@@ -36,8 +36,7 @@
   },
   "files": [
     "dist",
-    "bin",
-    "templates"
+    "bin"
   ],
   "repository": {
     "type": "git",

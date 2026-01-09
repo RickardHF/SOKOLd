@@ -10,7 +10,9 @@ import { detectProject, getNextStep } from './detect.js';
 export interface PipelineOptions {
   dryRun?: boolean;
   tool?: 'copilot' | 'claude';
+  model?: string;
   verbose?: boolean;
+  autoApprove?: boolean;
 }
 
 type Step = 'specify' | 'plan' | 'tasks' | 'implement';
@@ -68,7 +70,11 @@ export async function runPipeline(
     console.log(`   Command: ${tool} -p "${STEP_AGENTS[step]} ..."`);
     console.log('');
     
-    const success = await runAICommand(tool, prompt, options.verbose);
+    const success = await runAICommand(tool, prompt, {
+      verbose: options.verbose,
+      model: options.model,
+      autoApprove: options.autoApprove ?? true,
+    });
     
     if (!success) {
       console.error(`\n❌ Step "${step}" failed. Fix issues and run again.`);
@@ -116,18 +122,40 @@ function buildPrompt(step: Step, description?: string): string {
 /**
  * Run an AI CLI command and stream output
  */
+interface RunOptions {
+  verbose?: boolean;
+  model?: string;
+  autoApprove?: boolean;
+}
+
 async function runAICommand(
   tool: 'copilot' | 'claude',
   prompt: string,
-  verbose?: boolean
+  options: RunOptions = {}
 ): Promise<boolean> {
   return new Promise((resolve) => {
-    // Build the full command as a single string to handle quoting properly
-    const autoApprove = tool === 'copilot' ? '--allow-all-tools' : '--dangerously-skip-permissions';
-    const escapedPrompt = prompt.replace(/"/g, '\\"');
-    const fullCommand = `${tool} -p "${escapedPrompt}" ${autoApprove}`;
+    // Build command flags
+    const flags: string[] = [];
     
-    if (verbose) {
+    // Auto-approve flag (tool-specific)
+    if (options.autoApprove !== false) {
+      flags.push(tool === 'copilot' ? '--allow-all-tools' : '--dangerously-skip-permissions');
+    }
+    
+    // Model flag (tool-specific)
+    if (options.model) {
+      if (tool === 'copilot') {
+        flags.push(`--model ${options.model}`);
+      } else {
+        // Claude uses --model as well
+        flags.push(`--model ${options.model}`);
+      }
+    }
+    
+    const escapedPrompt = prompt.replace(/"/g, '\\"');
+    const fullCommand = `${tool} -p "${escapedPrompt}" ${flags.join(' ')}`.trim();
+    
+    if (options.verbose) {
       console.log(`   $ ${fullCommand}`);
     }
 
