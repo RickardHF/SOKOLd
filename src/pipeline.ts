@@ -27,10 +27,10 @@ export interface PipelineOptions {
 type Step = 'init' | 'specify' | 'plan' | 'tasks' | 'implement' | 'verify';
 
 const STEP_AGENTS: Record<Exclude<Step, 'init' | 'verify'>, string> = {
-  specify: '@speckit.specify',
-  plan: '@speckit.plan', 
-  tasks: '@speckit.tasks',
-  implement: '@speckit.implement',
+  specify: '/speckit.specify',
+  plan: '/speckit.plan', 
+  tasks: '/speckit.tasks',
+  implement: '/speckit.implement',
 };
 
 /** Track execution for summary */
