@@ -16,10 +16,12 @@ function Get-RepoRoot {
 }
 
 function Get-CurrentBranch {
+    # [SOKOLD-PATCH-START:no-branch-support]
     # Check if current-branch-only mode is enabled (always use 'main' for specs)
     if ($env:SOKOLD_CURRENT_BRANCH_ONLY -eq 'true') {
         return "main"
     }
+    # [SOKOLD-PATCH-END:no-branch-support]
     
     # First check if SPECIFY_FEATURE environment variable is set
     if ($env:SPECIFY_FEATURE) {
@@ -78,6 +80,7 @@ function Test-FeatureBranch {
         [bool]$HasGit = $true
     )
     
+    # [SOKOLD-PATCH-START:no-branch-support]
     # Check if current-branch-only mode is enabled (skip branch validation)
     if ($env:SOKOLD_CURRENT_BRANCH_ONLY -eq 'true') {
         Write-Output "[specify] Current-branch-only mode: skipping branch validation"

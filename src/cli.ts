@@ -20,6 +20,11 @@ import {
   validateConfigValue,
   getConfigPath,
 } from './config.js';
+import {
+  patchSpeckit,
+  unpatchSpeckit,
+  printSpeckitStatus,
+} from './speckit-patch.js';
 
 interface Args {
   description?: string;
@@ -33,6 +38,7 @@ interface Args {
   configCommand?: 'get' | 'set' | 'list' | 'path';
   configKey?: string;
   configValue?: string;
+  speckitCommand?: 'patch' | 'unpatch' | 'status';
 }
 
 function parseArgs(argv: string[]): Args {
@@ -55,6 +61,17 @@ function parseArgs(argv: string[]): Args {
         }
       } else {
         args.configCommand = 'list'; // default to list if no valid subcommand
+      }
+      continue;
+    }
+    
+    // Handle 'speckit' subcommand (sokold speckit patch/unpatch/status)
+    if (arg === 'speckit' && i === 2) {
+      const subCmd = argv[++i];
+      if (subCmd === 'patch' || subCmd === 'unpatch' || subCmd === 'status') {
+        args.speckitCommand = subCmd;
+      } else {
+        args.speckitCommand = 'status'; // default to status if no valid subcommand
       }
       continue;
     }
@@ -129,6 +146,11 @@ Config Commands:
   sokold config get <key>         Get a specific setting
   sokold config set <key> <val>   Set a specific setting
   sokold config path              Show config file path
+
+SpecKit Commands:
+  sokold speckit patch            Patch SpecKit scripts for branch control
+  sokold speckit unpatch          Remove patches, restore original scripts
+  sokold speckit status           Show current patch status
 
 Config Keys:
   tool                       AI CLI tool: copilot or claude
@@ -228,6 +250,44 @@ function handleConfigCommand(args: Args): void {
   }
 }
 
+function handleSpeckitCommand(args: Args): void {
+  switch (args.speckitCommand) {
+    case 'patch': {
+      console.log('\n🧊 Patching SpecKit scripts...\n');
+      const result = patchSpeckit();
+      for (const detail of result.details) {
+        console.log(`  ${detail}`);
+      }
+      if (result.success) {
+        console.log('\n✅ SpecKit patched successfully.');
+        console.log('   Set workflow.currentBranchOnly=true to enable branch control.\n');
+      } else {
+        console.error('\n❌ Patching failed.\n');
+        process.exit(1);
+      }
+      break;
+    }
+    case 'unpatch': {
+      console.log('\n🧊 Removing SpecKit patches...\n');
+      const result = unpatchSpeckit();
+      for (const detail of result.details) {
+        console.log(`  ${detail}`);
+      }
+      if (result.success) {
+        console.log('\n✅ SpecKit patches removed.\n');
+      } else {
+        console.error('\n❌ Unpatch failed.\n');
+        process.exit(1);
+      }
+      break;
+    }
+    case 'status': {
+      printSpeckitStatus();
+      break;
+    }
+  }
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv);
   
@@ -238,6 +298,11 @@ async function main(): Promise<void> {
   
   if (args.configCommand) {
     handleConfigCommand(args);
+    return;
+  }
+  
+  if (args.speckitCommand) {
+    handleSpeckitCommand(args);
     return;
   }
   

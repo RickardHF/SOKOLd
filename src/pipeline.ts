@@ -13,6 +13,7 @@
  */
 import { spawn } from 'child_process';
 import { detectProject, getNextStep } from './detect.js';
+import { patchSpeckit } from './speckit-patch.js';
 
 export interface PipelineOptions {
   dryRun?: boolean;
@@ -84,6 +85,17 @@ export async function runPipeline(
       }
       summary.stepsCompleted.push('init');
       console.log('✓ SpecKit initialized\n');
+      
+      // Auto-patch if currentBranchOnly is enabled
+      if (options.currentBranchOnly) {
+        console.log('🔧 Patching SpecKit for branch control...\n');
+        const patchResult = patchSpeckit();
+        if (patchResult.success) {
+          console.log('✓ SpecKit patched for branch control\n');
+        } else {
+          console.warn('⚠️ Could not auto-patch SpecKit scripts\n');
+        }
+      }
       
       // Re-detect status after init
       status = detectProject();

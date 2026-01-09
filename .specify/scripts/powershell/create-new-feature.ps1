@@ -2,6 +2,9 @@
 # Create a new feature
 [CmdletBinding()]
 param(
+    # [SOKOLD-PATCH-START:no-branch-support]
+    [switch]$NoBranch,
+    # [SOKOLD-PATCH-END:no-branch-support]
     [switch]$Json,
     [string]$ShortName,
     [int]$Number = 0,
@@ -241,7 +244,12 @@ if ($branchName.Length -gt $maxBranchLength) {
     Write-Warning "[specify] Truncated to: $branchName ($($branchName.Length) bytes)"
 }
 
-if ($hasGit) {
+# [SOKOLD-PATCH-START:no-branch-support]
+# Check if branch creation should be skipped
+$skipBranch = $NoBranch -or ($env:SOKOLD_CURRENT_BRANCH_ONLY -eq 'true')
+if ($skipBranch) {
+    Write-Output "[specify] Info: Skipping branch creation (--no-branch or SOKOLD_CURRENT_BRANCH_ONLY)"
+} elseif ($hasGit) {
     try {
         git checkout -b $branchName | Out-Null
     } catch {
@@ -250,6 +258,7 @@ if ($hasGit) {
 } else {
     Write-Warning "[specify] Warning: Git repository not detected; skipped branch creation for $branchName"
 }
+# [SOKOLD-PATCH-END:no-branch-support]
 
 $featureDir = Join-Path $specsDir $branchName
 New-Item -ItemType Directory -Path $featureDir -Force | Out-Null
