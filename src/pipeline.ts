@@ -118,7 +118,7 @@ export async function runPipeline(
   for (const step of agentSteps) {
     const prompt = buildPrompt(step, description, options.currentBranchOnly);
     console.log(`\n⚡ Running: ${step}`);
-    console.log(`   Command: ${tool} -p "${STEP_AGENTS[step]} ..."`);
+    console.log(`   Command: ${tool} -p "${STEP_AGENTS[step]} ..."${options.model ? ` --model ${options.model}` : ''}`);
     console.log('');
     
     const success = await runAICommand(tool, prompt, {
@@ -241,20 +241,15 @@ async function runAICommand(
     
     // Model flag (tool-specific)
     if (options.model) {
-      if (tool === 'copilot') {
-        flags.push(`--model ${options.model}`);
-      } else {
-        // Claude uses --model as well
-        flags.push(`--model ${options.model}`);
-      }
+      flags.push(`--model ${options.model}`);
     }
     
     const escapedPrompt = prompt.replace(/"/g, '\\"');
-    const fullCommand = `${tool} -p "${escapedPrompt}" ${flags.join(' ')}`.trim();
+    const fullCommand = `${tool} ${flags.join(' ')} -p "${escapedPrompt}"`.trim();
     
-    if (options.verbose) {
-      console.log(`   $ ${fullCommand}`);
-    }
+    // Always show the full command being run
+    console.log(`   $ ${fullCommand}`);
+    console.log('');
 
     // Set up environment with workflow options
     const env = { ...process.env };
