@@ -6,7 +6,7 @@
 #   sokold config set model gpt-4
 #   sokold config list
 #
-tool: claude
+tool: copilot
 autoApprove: true
 verbose: false
 output:

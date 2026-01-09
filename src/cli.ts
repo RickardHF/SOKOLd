@@ -42,7 +42,7 @@ function parseArgs(argv: string[]): Args {
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
     
-    // Handle 'config' subcommand
+    // Handle 'config' subcommand (sokold config set/get/list/path)
     if (arg === 'config' && i === 2) {
       const subCmd = argv[++i];
       if (subCmd === 'get' || subCmd === 'set' || subCmd === 'list' || subCmd === 'path') {
@@ -56,6 +56,21 @@ function parseArgs(argv: string[]): Args {
       } else {
         args.configCommand = 'list'; // default to list if no valid subcommand
       }
+      continue;
+    }
+    
+    // Handle shorthand: sokold set <key> <value> → sokold config set <key> <value>
+    if (arg === 'set' && i === 2) {
+      args.configCommand = 'set';
+      args.configKey = argv[++i];
+      args.configValue = argv[++i];
+      continue;
+    }
+    
+    // Handle shorthand: sokold get <key> → sokold config get <key>
+    if (arg === 'get' && i === 2) {
+      args.configCommand = 'get';
+      args.configKey = argv[++i];
       continue;
     }
     
@@ -93,9 +108,11 @@ function showHelp(): void {
 🧊 SoKolD - AI-Powered Code Generation
 
 Usage:
-  sokold "Your feature description"   Run full pipeline (specify → plan → tasks → implement)
+  sokold "Your feature description"   Run full pipeline (specify → plan → tasks → implement → verify)
   sokold --continue                   Continue from where you left off
   sokold --status                     Show project status
+  sokold set <key> <value>            Quick config (shorthand for config set)
+  sokold get <key>                    Quick config (shorthand for config get)
   sokold config <command>             Manage configuration
 
 Options:
@@ -106,6 +123,8 @@ Options:
   -h, --help           Show this help
 
 Config Commands:
+  sokold set <key> <val>          Set a config value (shorthand)
+  sokold get <key>                Get a config value (shorthand)
   sokold config list              Show all settings
   sokold config get <key>         Get a specific setting
   sokold config set <key> <val>   Set a specific setting
@@ -124,8 +143,9 @@ Examples:
   sokold "Add user authentication with JWT tokens"
   sokold "Create a REST API for managing todos"
   sokold --continue --tool claude
-  sokold config set tool claude
-  sokold config set model gpt-4
+  sokold set tool copilot
+  sokold set tool claude
+  sokold get tool
 `);
 }
 
