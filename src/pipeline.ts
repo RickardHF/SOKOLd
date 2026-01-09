@@ -116,7 +116,7 @@ export async function runPipeline(
   );
   
   for (const step of agentSteps) {
-    const prompt = buildPrompt(step, description);
+    const prompt = buildPrompt(step, description, options.currentBranchOnly);
     console.log(`\n⚡ Running: ${step}`);
     console.log(`   Command: ${tool} -p "${STEP_AGENTS[step]} ..."`);
     console.log('');
@@ -197,15 +197,22 @@ type AgentStep = 'specify' | 'plan' | 'tasks' | 'implement';
 /**
  * Build the prompt for a given step
  */
-function buildPrompt(step: AgentStep, description?: string): string {
+function buildPrompt(step: AgentStep, description?: string, currentBranchOnly?: boolean): string {
   const agent = STEP_AGENTS[step];
   
+  // Add current-branch-only instructions when enabled
+  const branchInstructions = currentBranchOnly 
+    ? `
+
+IMPORTANT: Current-branch-only mode is enabled. Do NOT create new git branches. Do NOT run any git checkout or git branch commands. Work entirely on the current branch. Place all specification files in specs/main/ directory instead of creating numbered directories like specs/001-feature-name/. Skip any branch-related setup scripts.`
+    : '';
+  
   if (step === 'specify' && description) {
-    return `${agent} ${description}`;
+    return `${agent} ${description}${branchInstructions}`;
   }
   
   // Other steps just invoke the agent - it reads context from specs/
-  return agent;
+  return `${agent}${branchInstructions}`;
 }
 
 /**
