@@ -122,7 +122,11 @@ function parseArgs(argv: string[]): Args {
 
 function showHelp(): void {
   console.log(`
-🧊 SOKOLd - AI-Powered Code Generation
+   _____ ____  _  __ ____  _      _____  
+  / ___// __ \\| |/ // __ \\| |    |  __ \\ 
+  \\__ \\| |  | |   /| |  | | |    | |  | |
+ ___) | |__| | . \\| |__| | |____| |__| |
+|____/ \\____/|_|\\_\\____/|______|_____/ 
 
 Usage:
   sokold "Your feature description"   Run full pipeline (specify → plan → tasks → implement → verify)

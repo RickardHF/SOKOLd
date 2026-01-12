@@ -61,7 +61,12 @@ export async function runPipeline(
     startTime: new Date(),
   };
   
-  console.log('\n🧊 SOKOLd - AI-Powered Code Generation\n');
+  console.log(`
+   _____ ____  _  __ ____  _      _____  
+  / ___// __ \\| |/ // __ \\| |    |  __ \\ 
+  \\__ \\| |  | |   /| |  | | |    | |  | |
+ ___) | |__| | . \\| |__| | |____| |__| |
+|____/ \\____/|_|\\_\\____/|______|_____/ `);
   
   // Show current status
   console.log('📊 Project status:');

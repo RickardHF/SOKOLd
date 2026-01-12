@@ -143,7 +143,11 @@ Display help (same as `--help`).
 ### Human (default)
 
 ```
-🧊 SOKOLd - AI-Powered Code Generation
+   _____ ____  _  __ ____  _      _____  
+  / ___// __ \| |/ // __ \| |    |  __ \ 
+  \__ \| |  | |   /| |  | | |    | |  | |
+ ___) | |__| | . \| |__| | |____| |__| |
+|____/ \____/|_|\_\\____/|______|_____/ 
 
 📊 Project status:
    SpecKit initialized: ✓
