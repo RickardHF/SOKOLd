@@ -172,13 +172,14 @@ SpecKit Commands:
   sokold speckit status           Show current patch status
 
 Config Keys:
-  tool                       AI CLI tool: copilot or claude
-  model                      Model to use (e.g., gpt-4, claude-3-opus)
-  autoApprove                Auto-approve tool calls (true/false)
-  verbose                    Verbose output (true/false)
-  output.colors              Enable colors (true/false)
-  output.format              Output format: human or json
-  workflow.currentBranchOnly Force all features to current branch (true/false)
+  tool                        AI CLI tool: copilot or claude
+  model                       Model to use (e.g., gpt-4, claude-3-opus)
+  autoApprove                 Auto-approve tool calls (true/false)
+  verbose                     Verbose output (true/false)
+  output.colors               Enable colors (true/false)
+  output.format               Output format: human or json
+  workflow.currentBranchOnly  Force all features to current branch (true/false)
+  workflow.autoConstitution   (Experimental) Auto-create constitution if missing (true/false)
 
 Examples:
   sokold init                              # First-time setup
@@ -195,10 +196,12 @@ function showStatus(): void {
   const stateNextStep = getNextStepFromState();
   const fileNextStep = getNextStep(status, false);
   const nextStep = stateNextStep || fileNextStep;
+  const config = loadConfig();
   
   console.log('\n🧊 SOKOLd - Project Status\n');
   console.log('SpecKit Setup:');
   console.log(`  .specify folder:     ${status.hasSpeckit ? '✓ exists' : '✗ not found'}`);
+  console.log(`  constitution:        ${status.hasConstitution ? '✓ exists' : '✗ not found'}`);
   console.log(`  specs/ folder:       ${status.hasSpecs ? '✓ exists' : '✗ not found'}`);
   console.log('');
   console.log('Current Feature (specs/main/):');
@@ -206,6 +209,16 @@ function showStatus(): void {
   console.log(`  plan.md:             ${status.hasPlan ? '✓ exists' : '✗ not found'}`);
   console.log(`  tasks.md:            ${status.hasTasks ? '✓ exists' : '✗ not found'}`);
   console.log('');
+  
+  // Show auto-constitution status if relevant
+  if (!status.hasConstitution) {
+    if (config.workflow.autoConstitution) {
+      console.log('📜 Constitution: Will be auto-created on next feature run');
+    } else {
+      console.log('📜 Constitution: Not found (enable workflow.autoConstitution to auto-create)');
+    }
+    console.log('');
+  }
   
   // Show pipeline state if available
   if (state) {
@@ -426,6 +439,7 @@ async function main(): Promise<void> {
   const model = args.model ?? config.model;
   const verbose = args.verbose ?? config.verbose;
   const currentBranchOnly = config.workflow.currentBranchOnly;
+  const autoConstitution = config.workflow.autoConstitution;
   
   // Need either a description or --continue to run the pipeline
   if (!args.description && !args.continue) {
@@ -440,6 +454,7 @@ async function main(): Promise<void> {
     verbose,
     autoApprove: config.autoApprove,
     currentBranchOnly,
+    autoConstitution,
   });
 }
 

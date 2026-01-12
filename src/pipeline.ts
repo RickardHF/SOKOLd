@@ -30,13 +30,15 @@ export interface PipelineOptions {
   verbose?: boolean;
   autoApprove?: boolean;
   currentBranchOnly?: boolean;
+  autoConstitution?: boolean;
   maxRetries?: number;
 }
 
 // Use PipelineStep from state module, plus 'init' which is internal
-type Step = 'init' | PipelineStep;
+type Step = 'init' | 'constitution' | PipelineStep;
 
 const STEP_AGENTS: Record<Exclude<Step, 'init' | 'verify'>, string> = {
+  constitution: '/speckit.constitution',
   specify: '/speckit.specify',
   plan: '/speckit.plan', 
   tasks: '/speckit.tasks',
@@ -87,6 +89,7 @@ export async function runPipeline(
   // Show current status
   console.log('📊 Project status:');
   console.log(`   SpecKit initialized: ${status.hasSpeckit ? '✓' : '✗'}`);
+  console.log(`   Has constitution:    ${status.hasConstitution ? '✓' : '✗'}`);
   console.log(`   Has specification:   ${status.hasSpec ? '✓' : '✗'}`);
   console.log(`   Has plan:            ${status.hasPlan ? '✓' : '✗'}`);
   console.log(`   Has tasks:           ${status.hasTasks ? '✓' : '✗'}`);
@@ -120,6 +123,25 @@ export async function runPipeline(
       
       // Re-detect status after init
       status = detectProject();
+    }
+  }
+
+  // Step 1.5: Auto-create constitution if enabled and missing
+  if (options.autoConstitution && !status.hasConstitution && description) {
+    console.log('📜 No constitution found. Auto-creating based on project context...\n');
+    
+    if (!options.dryRun) {
+      const constitutionSuccess = await runConstitutionStep(tool, description, status.hasExistingCode, options);
+      if (constitutionSuccess) {
+        summary.stepsCompleted.push('constitution');
+        console.log('✓ Constitution created\n');
+        // Re-detect status after constitution
+        status = detectProject();
+      } else {
+        console.warn('⚠️ Could not auto-create constitution, continuing anyway...\n');
+      }
+    } else {
+      console.log('   Would run: constitution step with project analysis');
     }
   }
 
@@ -352,6 +374,51 @@ export async function runSpecifyInit(
       console.error('Failed to run specify init:', err.message);
       resolve(false);
     });
+  });
+}
+
+/**
+ * Run the constitution step to create project principles
+ * Analyzes existing code if present, otherwise uses the feature description
+ */
+async function runConstitutionStep(
+  tool: 'copilot' | 'claude',
+  description: string,
+  hasExistingCode: boolean,
+  options: PipelineOptions
+): Promise<boolean> {
+  let prompt: string;
+  
+  if (hasExistingCode) {
+    // Existing project - analyze it to create constitution
+    prompt = `${STEP_AGENTS.constitution} Analyze this existing project and create a constitution based on:
+1. The existing code structure, languages, and patterns used
+2. Any existing README, package.json, or config files that indicate project standards
+3. The coding style and conventions already in place
+
+Create a constitution that reflects the project's current practices and principles.
+Keep it concise but comprehensive. Focus on principles that will guide future AI-assisted development.`;
+  } else {
+    // New project - use the feature description to seed the constitution
+    prompt = `${STEP_AGENTS.constitution} Create a constitution for a new project based on this initial feature request:
+"${description}"
+
+Infer appropriate principles based on:
+1. The type of project/feature being requested
+2. Common best practices for similar projects
+3. Cross-platform compatibility, testing, and documentation standards
+
+Keep the constitution concise but set a solid foundation for the project.`;
+  }
+
+  console.log(`\n⚡ Running: constitution (auto-generate)`);
+  console.log(`   Context: ${hasExistingCode ? 'Analyzing existing project' : 'Creating from feature description'}`);
+  
+  return runAICommand(tool, prompt, {
+    verbose: options.verbose,
+    model: options.model,
+    autoApprove: options.autoApprove ?? true,
+    currentBranchOnly: options.currentBranchOnly,
   });
 }
 

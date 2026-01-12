@@ -33,6 +33,8 @@ export interface SokoldConfig {
   workflow: {
     /** Force all features to use current branch (no new branches/folders) */
     currentBranchOnly: boolean;
+    /** (Experimental) Auto-create constitution if missing, based on project structure or description */
+    autoConstitution: boolean;
   };
   
   /** Custom prompt templates directory */
@@ -50,6 +52,7 @@ const DEFAULT_CONFIG: SokoldConfig = {
   },
   workflow: {
     currentBranchOnly: false,
+    autoConstitution: false,
   },
 };
 
@@ -255,6 +258,7 @@ export function getConfigKeys(): Record<string, string> {
     'output.colors': 'Enable colored output',
     'output.format': 'Output format: human or json',
     'workflow.currentBranchOnly': 'Force all features to use current branch (no new branches/folders)',
+    'workflow.autoConstitution': '(Experimental) Auto-create constitution if missing',
     'promptsDir': 'Custom prompt templates directory',
   };
 }
@@ -278,6 +282,7 @@ export function validateConfigValue(key: string, value: string): string | null {
     case 'verbose':
     case 'output.colors':
     case 'workflow.currentBranchOnly':
+    case 'workflow.autoConstitution':
       if (!['true', 'false'].includes(value)) {
         return `Invalid value "${value}". Must be "true" or "false"`;
       }
