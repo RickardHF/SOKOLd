@@ -61,6 +61,12 @@ function parseArgs(argv: string[]): Args {
       continue;
     }
     
+    // Handle 'status' command (sokold status)
+    if (arg === 'status' && i === 2) {
+      args.status = true;
+      continue;
+    }
+    
     // Handle 'config' subcommand (sokold config set/get/list/path)
     if (arg === 'config' && i === 2) {
       const subCmd = argv[++i];
@@ -145,10 +151,11 @@ Usage:
   sokold init                         Initialize SOKOLd and SpecKit (setup only, no workflow)
   sokold "Your feature description"   Run full pipeline (specify → plan → tasks → implement → verify)
   sokold --continue                   Continue from where you left off
-  sokold --status                     Show project status
+  sokold status                       Show project status
 
 Commands:
   sokold init                     Initialize SpecKit in the current directory
+  sokold status                   Show project status (same as --status)
   sokold set <key> <value>        Quick config (shorthand for config set)
   sokold get <key>                Quick config (shorthand for config get)
   sokold config <command>         Manage configuration
@@ -185,7 +192,7 @@ Examples:
   sokold init                              # First-time setup
   sokold "Add user authentication"         # Start a new feature
   sokold --continue                        # Resume work on current feature
-  sokold --status                          # Check project status
+  sokold status                            # Check project status
   sokold set tool claude                   # Switch to Claude
 `);
 }
