@@ -132,7 +132,21 @@ function patchPowerShellScripts(scriptsDir: string): PatchResult {
         featureDirPattern,
         `${PATCH_MARKER_START}
 # Check if we should use current branch instead of creating numbered directory
-$skipBranch = $NoBranch -or ($env:SOKOLD_CURRENT_BRANCH_ONLY -eq 'true')
+# Check env var first, then fallback to config file
+$currentBranchOnly = $false
+if ($env:SOKOLD_CURRENT_BRANCH_ONLY -eq 'true') {
+    $currentBranchOnly = $true
+} else {
+    # Check .sokold/config.yaml for currentBranchOnly setting
+    $sokoldConfig = Join-Path $repoRoot '.sokold/config.yaml'
+    if (Test-Path $sokoldConfig) {
+        $configContent = Get-Content $sokoldConfig -Raw
+        if ($configContent -match 'currentBranchOnly:\\s*true') {
+            $currentBranchOnly = $true
+        }
+    }
+}
+$skipBranch = $NoBranch -or $currentBranchOnly
 if ($skipBranch) {
     # Get current branch name (or fallback to 'main')
     try {
@@ -159,7 +173,20 @@ New-Item -ItemType Directory`
           gitCheckoutPattern,
           `${PATCH_MARKER_START}
 # Check if branch/folder creation should be skipped (current-branch-only mode)
-$skipBranch = $NoBranch -or ($env:SOKOLD_CURRENT_BRANCH_ONLY -eq 'true')
+# Check env var first, then fallback to config file
+$currentBranchOnly = $false
+if ($env:SOKOLD_CURRENT_BRANCH_ONLY -eq 'true') {
+    $currentBranchOnly = $true
+} else {
+    $sokoldConfig = Join-Path $repoRoot '.sokold/config.yaml'
+    if (Test-Path $sokoldConfig) {
+        $configContent = Get-Content $sokoldConfig -Raw
+        if ($configContent -match 'currentBranchOnly:\\s*true') {
+            $currentBranchOnly = $true
+        }
+    }
+}
+$skipBranch = $NoBranch -or $currentBranchOnly
 if ($skipBranch) {
     # Get current branch name
     try {
