@@ -9,7 +9,7 @@
  *   sokold config <command>               # Manage configuration
  *   sokold --help                         # Show help
  */
-import { runPipeline } from './pipeline.js';
+import { runPipeline, runSpecifyInit } from './pipeline.js';
 import { detectProject, getNextStep } from './detect.js';
 import { 
   loadConfig, 
@@ -19,12 +19,18 @@ import {
   getConfigKeys,
   validateConfigValue,
   getConfigPath,
+  initConfig,
+  hasConfig,
 } from './config.js';
 import {
   patchSpeckit,
   unpatchSpeckit,
   printSpeckitStatus,
 } from './speckit-patch.js';
+import {
+  loadState,
+  getNextStepFromState,
+} from './state.js';
 
 interface Args {
   description?: string;
@@ -35,6 +41,7 @@ interface Args {
   model?: string;
   verbose?: boolean;
   help?: boolean;
+  init?: boolean;
   configCommand?: 'get' | 'set' | 'list' | 'path';
   configKey?: string;
   configValue?: string;
@@ -47,6 +54,12 @@ function parseArgs(argv: string[]): Args {
   
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
+    
+    // Handle 'init' command (sokold init)
+    if (arg === 'init' && i === 2) {
+      args.init = true;
+      continue;
+    }
     
     // Handle 'config' subcommand (sokold config set/get/list/path)
     if (arg === 'config' && i === 2) {
@@ -129,12 +142,16 @@ function showHelp(): void {
 |____/ \\____/|_|\\_\\____/|______|_____/ 
 
 Usage:
+  sokold init                         Initialize SOKOLd and SpecKit (setup only, no workflow)
   sokold "Your feature description"   Run full pipeline (specify → plan → tasks → implement → verify)
   sokold --continue                   Continue from where you left off
   sokold --status                     Show project status
-  sokold set <key> <value>            Quick config (shorthand for config set)
-  sokold get <key>                    Quick config (shorthand for config get)
-  sokold config <command>             Manage configuration
+
+Commands:
+  sokold init                     Initialize SpecKit in the current directory
+  sokold set <key> <value>        Quick config (shorthand for config set)
+  sokold get <key>                Quick config (shorthand for config get)
+  sokold config <command>         Manage configuration
 
 Options:
   -t, --tool <name>    Use specific AI tool: copilot (default) or claude
@@ -144,8 +161,6 @@ Options:
   -h, --help           Show this help
 
 Config Commands:
-  sokold set <key> <val>          Set a config value (shorthand)
-  sokold get <key>                Get a config value (shorthand)
   sokold config list              Show all settings
   sokold config get <key>         Get a specific setting
   sokold config set <key> <val>   Set a specific setting
@@ -166,18 +181,20 @@ Config Keys:
   workflow.currentBranchOnly Force all features to current branch (true/false)
 
 Examples:
-  sokold "Add user authentication with JWT tokens"
-  sokold "Create a REST API for managing todos"
-  sokold --continue --tool claude
-  sokold set tool copilot
-  sokold set tool claude
-  sokold get tool
+  sokold init                              # First-time setup
+  sokold "Add user authentication"         # Start a new feature
+  sokold --continue                        # Resume work on current feature
+  sokold --status                          # Check project status
+  sokold set tool claude                   # Switch to Claude
 `);
 }
 
 function showStatus(): void {
   const status = detectProject();
-  const nextStep = getNextStep(status, false);
+  const state = loadState();
+  const stateNextStep = getNextStepFromState();
+  const fileNextStep = getNextStep(status, false);
+  const nextStep = stateNextStep || fileNextStep;
   
   console.log('\n🧊 SOKOLd - Project Status\n');
   console.log('SpecKit Setup:');
@@ -190,10 +207,24 @@ function showStatus(): void {
   console.log(`  tasks.md:            ${status.hasTasks ? '✓ exists' : '✗ not found'}`);
   console.log('');
   
+  // Show pipeline state if available
+  if (state) {
+    console.log('Pipeline State:');
+    if (state.description) {
+      console.log(`  Feature:           "${state.description}"`);
+    }
+    console.log(`  Started:           ${new Date(state.startedAt).toLocaleString()}`);
+    console.log(`  Completed steps:   ${state.completedSteps.length > 0 ? state.completedSteps.join(' → ') : '(none)'}`);
+    if (state.currentStep) {
+      console.log(`  In progress:       ${state.currentStep}`);
+    }
+    console.log('');
+  }
+  
   if (nextStep) {
     console.log(`Next step: ${nextStep}`);
     console.log(`Run: sokold --continue`);
-  } else if (!status.hasSpec) {
+  } else if (!status.hasSpec && !state) {
     console.log('No feature in progress. Start one with:');
     console.log('  sokold "Your feature description"');
   } else {
@@ -292,11 +323,85 @@ function handleSpeckitCommand(args: Args): void {
   }
 }
 
+async function handleInit(args: Args): Promise<void> {
+  const config = loadConfig();
+  const tool = args.tool ?? config.tool;
+  const verbose = args.verbose ?? config.verbose;
+  const status = detectProject();
+  const configExists = hasConfig();
+  
+  console.log(`
+   _____ ____  _  __ ____  _      _____  
+  / ___// __ \\| |/ // __ \\| |    |  __ \\ 
+  \\__ \\| |  | |   /| |  | | |    | |  | |
+ ___) | |__| | . \\| |__| | |____| |__| |
+|____/ \\____/|_|\\_\\____/|______|_____/ 
+
+🔧 Initializing SOKOLd...
+`);
+
+  // Check if already fully initialized
+  if (status.hasSpeckit && configExists) {
+    console.log('✓ Already initialized:');
+    console.log('  • SpecKit (.specify folder)');
+    console.log('  • SOKOLd config (.sokold/config.yaml)');
+    console.log('');
+    console.log('Ready to use! Start a feature with:');
+    console.log('  sokold "Your feature description"');
+    console.log('');
+    return;
+  }
+
+  console.log(`Using AI tool: ${tool}`);
+  console.log('');
+  
+  // Step 1: Initialize SpecKit if needed
+  if (!status.hasSpeckit) {
+    console.log('Setting up SpecKit...');
+    const success = await runSpecifyInit(tool, verbose);
+    
+    if (!success) {
+      console.error('\n❌ Failed to initialize SpecKit.');
+      console.error('   Try running manually: specify init --here');
+      process.exit(1);
+    }
+    console.log('✓ SpecKit initialized (.specify folder created)');
+  } else {
+    console.log('✓ SpecKit already initialized');
+  }
+  
+  // Step 2: Create SOKOLd config if needed
+  if (!configExists) {
+    const created = initConfig();
+    if (created) {
+      console.log('✓ SOKOLd config created (.sokold/config.yaml)');
+    }
+  } else {
+    console.log('✓ SOKOLd config already exists');
+  }
+  
+  console.log('');
+  console.log('✅ SOKOLd initialized successfully!');
+  console.log('');
+  console.log('Next steps:');
+  console.log('  1. Start a new feature:  sokold "Your feature description"');
+  console.log('  2. Check status:         sokold --status');
+  console.log('  3. Customize settings:   sokold config list');
+  console.log('');
+  console.log('Config file location: .sokold/config.yaml');
+  console.log('');
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv);
   
   if (args.help) {
     showHelp();
+    return;
+  }
+  
+  if (args.init) {
+    await handleInit(args);
     return;
   }
   
@@ -322,7 +427,7 @@ async function main(): Promise<void> {
   const verbose = args.verbose ?? config.verbose;
   const currentBranchOnly = config.workflow.currentBranchOnly;
   
-  // Need either a description or --continue
+  // Need either a description or --continue to run the pipeline
   if (!args.description && !args.continue) {
     showHelp();
     return;

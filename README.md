@@ -16,11 +16,13 @@ Transform natural language descriptions into working code with a single command.
 # Install globally
 npm install -g sokold
 
+# Initialize SOKOLd in your project (one-time setup)
+sokold init
+
 # Create a feature with natural language
 sokold "Add a REST API endpoint for user authentication with JWT"
 
 # That's it! SOKOLd handles everything:
-# ✓ Initializes SpecKit structure (if needed)
 # ✓ Generates specifications (specify → plan → tasks)
 # ✓ Implements the feature
 # ✓ Runs verification checks
@@ -41,6 +43,18 @@ SOKOLd orchestrates SpecKit agents in a pipeline:
 You describe what you want, and SOKOLd handles the rest.
 
 ## Commands
+
+### Initialize
+
+```bash
+# First-time setup - initializes SpecKit in your project
+sokold init
+
+# With specific tool
+sokold init --tool claude
+```
+
+This is a **setup-only** command that prepares your project for SOKOLd without running any workflow steps. It creates the `.specify/` folder structure needed by SpecKit.
 
 ### Primary Usage
 
@@ -73,6 +87,7 @@ sokold -s
 Shows:
 - Whether SpecKit is initialized
 - What specification files exist (`spec.md`, `plan.md`, `tasks.md`)
+- Pipeline state (what steps have been completed, what's next)
 - What the next step would be
 
 ### Configuration

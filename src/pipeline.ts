@@ -14,6 +14,14 @@
 import { spawn } from 'child_process';
 import { detectProject, getNextStep } from './detect.js';
 import { patchSpeckit } from './speckit-patch.js';
+import {
+  initState,
+  markStepStarted,
+  markStepCompleted,
+  getNextStepFromState,
+  clearState,
+  type PipelineStep,
+} from './state.js';
 
 export interface PipelineOptions {
   dryRun?: boolean;
@@ -25,7 +33,8 @@ export interface PipelineOptions {
   maxRetries?: number;
 }
 
-type Step = 'init' | 'specify' | 'plan' | 'tasks' | 'implement' | 'verify';
+// Use PipelineStep from state module, plus 'init' which is internal
+type Step = 'init' | PipelineStep;
 
 const STEP_AGENTS: Record<Exclude<Step, 'init' | 'verify'>, string> = {
   specify: '/speckit.specify',
@@ -53,6 +62,13 @@ export async function runPipeline(
   const tool = options.tool ?? 'copilot';
   const maxRetries = options.maxRetries ?? 3;
   let status = detectProject();
+  
+  // Initialize or load state
+  if (description) {
+    // Starting a new feature - clear any old state
+    clearState();
+    initState(description);
+  }
   
   const summary: ExecutionSummary = {
     stepsCompleted: [],
@@ -133,6 +149,9 @@ export async function runPipeline(
   );
   
   for (const step of agentSteps) {
+    // Track that we're starting this step
+    markStepStarted(step);
+    
     const prompt = buildPrompt(step, description, options.currentBranchOnly);
     console.log(`\n⚡ Running: ${step}`);
     console.log(`   Command: ${tool} -p "${STEP_AGENTS[step]} ..."${options.model ? ` --model ${options.model}` : ''}`);
@@ -147,11 +166,13 @@ export async function runPipeline(
     
     if (!success) {
       summary.stepsFailed.push(step);
-      console.error(`\n❌ Step "${step}" failed. Fix issues and run again.`);
+      console.error(`\n❌ Step "${step}" failed. Fix issues and run "sokold --continue" to retry.`);
       printSummary(summary);
       process.exit(1);
     }
     
+    // Track completion
+    markStepCompleted(step);
     summary.stepsCompleted.push(step);
     console.log(`✓ ${step} completed`);
   }
@@ -199,11 +220,20 @@ function determineSteps(status: ReturnType<typeof detectProject>, description?: 
     return ['specify', 'plan', 'tasks', 'implement', 'verify'];
   }
   
-  // Continue from where we left off
+  // Continue from where we left off - first check state, then fall back to file detection
+  const allSteps: Step[] = ['specify', 'plan', 'tasks', 'implement', 'verify'];
+  
+  // Check state first (more reliable)
+  const stateNextStep = getNextStepFromState();
+  if (stateNextStep) {
+    const startIndex = allSteps.indexOf(stateNextStep);
+    return allSteps.slice(startIndex);
+  }
+  
+  // Fall back to file-based detection
   const nextStep = getNextStep(status, false);
   if (!nextStep) return [];
   
-  const allSteps: Step[] = ['specify', 'plan', 'tasks', 'implement', 'verify'];
   const startIndex = allSteps.indexOf(nextStep as Step);
   return allSteps.slice(startIndex);
 }
@@ -294,8 +324,9 @@ async function runAICommand(
 
 /**
  * Run `specify init` to initialize SpecKit in the current directory
+ * Exported so it can be called directly from CLI init command
  */
-async function runSpecifyInit(
+export async function runSpecifyInit(
   tool: 'copilot' | 'claude',
   verbose?: boolean
 ): Promise<boolean> {
