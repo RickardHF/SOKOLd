@@ -61,7 +61,7 @@ export async function runPipeline(
     startTime: new Date(),
   };
   
-  console.log('\n🧊 SoKolD - AI-Powered Code Generation\n');
+  console.log('\n🧊 SOKOLd - AI-Powered Code Generation\n');
   
   // Show current status
   console.log('📊 Project status:');

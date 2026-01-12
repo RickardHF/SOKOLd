@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * SoKolD CLI - Simple entry point
+ * SOKOLd CLI - Simple entry point
  * 
  * Usage:
  *   sokold "Your feature description"     # Run full pipeline
@@ -122,7 +122,7 @@ function parseArgs(argv: string[]): Args {
 
 function showHelp(): void {
   console.log(`
-🧊 SoKolD - AI-Powered Code Generation
+🧊 SOKOLd - AI-Powered Code Generation
 
 Usage:
   sokold "Your feature description"   Run full pipeline (specify → plan → tasks → implement → verify)
@@ -175,7 +175,7 @@ function showStatus(): void {
   const status = detectProject();
   const nextStep = getNextStep(status, false);
   
-  console.log('\n🧊 SoKolD - Project Status\n');
+  console.log('\n🧊 SOKOLd - Project Status\n');
   console.log('SpecKit Setup:');
   console.log(`  .specify folder:     ${status.hasSpeckit ? '✓ exists' : '✗ not found'}`);
   console.log(`  specs/ folder:       ${status.hasSpecs ? '✓ exists' : '✗ not found'}`);
@@ -204,7 +204,7 @@ function handleConfigCommand(args: Args): void {
     case 'list': {
       const config = listConfig();
       const keys = getConfigKeys();
-      console.log('\n🧊 SoKolD Configuration\n');
+      console.log('\n🧊 SOKOLd Configuration\n');
       for (const [key, value] of Object.entries(config)) {
         const desc = keys[key] || '';
         const displayValue = value === undefined ? '(not set)' : String(value);

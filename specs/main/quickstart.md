@@ -1,12 +1,12 @@
 # Quickstart: SOKOLd CLI
 
-**SOKOLd** is a thin CLI orchestrator that runs AI CLI tools to execute speckit workflows.
+**SOKOLd** is a thin CLI orchestrator that runs AI CLI tools to execute SpecKit workflows.
 
 ## Prerequisites
 
 - Node.js 18+
 - One of: `copilot` CLI (GitHub Copilot) or `claude` CLI (Anthropic Claude)
-- `specify` CLI (speckit initialization)
+- `specify` CLI (SpecKit)
 
 ## Installation
 
@@ -35,7 +35,7 @@ sokold "Add user authentication with JWT tokens"
 ```
 
 SOKOLd will:
-1. Initialize speckit if needed (`specify init`)
+1. Initialize SpecKit if needed (`specify init`)
 2. Create specification → plan → tasks
 3. Implement the feature
 4. Verify and fix any issues
@@ -64,7 +64,7 @@ sokold --continue
 ### 4. Check Project Status
 
 ```bash
-# See what speckit artifacts exist
+# See what SpecKit artifacts exist
 sokold --status
 ```
 
@@ -90,18 +90,34 @@ sokold --status
 | `verbose` | true, false | false | Verbose output |
 | `output.colors` | true, false | true | Terminal colors |
 | `output.format` | human, json | human | Output format |
+| `workflow.currentBranchOnly` | true, false | false | Stay on current branch |
 
 ## How It Works
 
 SOKOLd is a **thin orchestrator** - it doesn't manipulate files directly. Instead, it:
 
 1. **Detects** project state (checks for `.specify/`, `specs/`, etc.)
-2. **Spawns** the configured AI CLI (`copilot` or `claude`) with speckit agent prompts
+2. **Spawns** the configured AI CLI (`copilot` or `claude`) with SpecKit agent prompts
 3. **Sequences** the workflow: specify → plan → tasks → implement
 4. **Verifies** implementation via AI and retries fixes if needed
 5. **Reports** what was done
 
 All file operations are performed by the AI CLI, not SOKOLd.
+
+## Branch Control
+
+By default, SpecKit creates feature branches. To stay on your current branch:
+
+```bash
+# Enable current-branch-only mode
+sokold set workflow.currentBranchOnly true
+
+# Apply patches to SpecKit scripts (required for branch control)
+sokold speckit patch
+
+# Now features will use specs/main/ without creating branches
+sokold "Add new feature"
+```
 
 ## Troubleshooting
 
@@ -117,9 +133,9 @@ gh extension install github/gh-copilot
 pip install anthropic-cli
 ```
 
-### "Speckit initialization failed"
+### "SpecKit initialization failed"
 
-Try running speckit init manually:
+Try running SpecKit init manually:
 
 ```bash
 specify init --here --ai copilot
