@@ -1,0 +1,115 @@
+version: 1
+entries:
+  - id: run-mkfl1rg5-4r39
+    startedAt: 2026-01-15T15:06:43.637Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps: []
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+  - id: run-mkfhtpmr-qxo0
+    startedAt: 2026-01-15T13:36:29.187Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps: []
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+  - id: run-mkfhtgfv-ptf9
+    startedAt: 2026-01-15T13:36:17.275Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps: []
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+  - id: run-mkfhsiuv-8y10
+    startedAt: 2026-01-15T13:35:33.751Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps: []
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+  - id: run-mkfhqpe6-kqi3
+    startedAt: 2026-01-15T13:34:08.910Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps: []
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+  - id: run-mkfhqbar-x93p
+    startedAt: 2026-01-15T13:33:50.643Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps: []
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+  - id: run-mkfhpuhn-88nb
+    startedAt: 2026-01-15T13:33:28.859Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps: []
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+  - id: run-mkfhexdz-wd4j
+    startedAt: 2026-01-15T13:24:59.399Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps: []
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+  - id: run-mkfhea18-6hnw
+    startedAt: 2026-01-15T13:24:29.132Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps: []
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+  - id: run-mke6er52-ergs
+    startedAt: 2026-01-14T15:29:09.350Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps: []
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+  - id: run-mke6dxnn-ouk1
+    startedAt: 2026-01-14T15:28:31.139Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps: []
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+  - id: run-mke4ornf-spdo
+    startedAt: 2026-01-14T14:40:57.339Z
+    description: hello
+    isContinuation: false
+    tool: copilot
+    steps:
+      - step: specify
+        startedAt: 2026-01-14T14:41:01.384Z
+        outcome: in-progress
+        prompt: /speckit.specify hello
+    filesChanged: []
+    outcome: in-progress
+    fixAttempts: 0
+activeRunId: run-mkfl1rg5-4r39

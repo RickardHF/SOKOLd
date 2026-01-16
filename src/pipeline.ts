@@ -22,6 +22,18 @@ import {
   clearState,
   type PipelineStep,
 } from './state.js';
+import {
+  startHistoryEntry,
+  recordStepStart,
+  recordStepComplete,
+  recordFixAttempt,
+  completeHistoryEntry,
+  type StepName,
+} from './history.js';
+import { decide } from './ollama.js';
+import { askUserExec, askUserFunction, continueProcessFunction, endProcessFunction, reiterateFunction, runAICommandExec, runCommandExec } from './functions/misc.js';
+import { Message } from 'ollama';
+import { createTasks, implement, ImplementFunction, plan, PlanFunction, specify, SpecifyFunction, TaskFunction } from './functions/speckit.js';
 
 export interface PipelineOptions {
   dryRun?: boolean;
@@ -40,7 +52,7 @@ type Step = 'init' | 'constitution' | PipelineStep;
 const STEP_AGENTS: Record<Exclude<Step, 'init' | 'verify'>, string> = {
   constitution: '/speckit.constitution',
   specify: '/speckit.specify',
-  plan: '/speckit.plan', 
+  plan: '/speckit.plan',
   tasks: '/speckit.tasks',
   implement: '/speckit.implement',
 };
@@ -64,28 +76,36 @@ export async function runPipeline(
   const tool = options.tool ?? 'copilot';
   const maxRetries = options.maxRetries ?? 3;
   let status = detectProject();
-  
+
   // Initialize or load state
   if (description) {
     // Starting a new feature - clear any old state
     clearState();
     initState(description);
   }
-  
+
+  // Start history tracking
+  startHistoryEntry({
+    description,
+    isContinuation: !description,
+    tool,
+    model: options.model,
+  });
+
   const summary: ExecutionSummary = {
     stepsCompleted: [],
     stepsFailed: [],
     fixAttempts: 0,
     startTime: new Date(),
   };
-  
+
   console.log(`
    _____ ____  _  __ ____  _      _____  
   / ___// __ \\| |/ // __ \\| |    |  __ \\ 
   \\__ \\| |  | |   /| |  | | |    | |  | |
  ___) | |__| | . \\| |__| | |____| |__| |
 |____/ \\____/|_|\\_\\____/|______|_____/ `);
-  
+
   // Show current status
   console.log('📊 Project status:');
   console.log(`   SpecKit initialized: ${status.hasSpeckit ? '✓' : '✗'}`);
@@ -98,7 +118,7 @@ export async function runPipeline(
   // Step 1: Initialize speckit if needed
   if (!status.hasSpeckit) {
     console.log('🔧 SpecKit not initialized. Running setup...\n');
-    
+
     if (options.dryRun) {
       console.log(`   Would run: specify init --here --ai ${tool} --force`);
     } else {
@@ -109,7 +129,7 @@ export async function runPipeline(
       }
       summary.stepsCompleted.push('init');
       console.log('✓ SpecKit initialized\n');
-      
+
       // Auto-patch if currentBranchOnly is enabled
       if (options.currentBranchOnly) {
         console.log('🔧 Patching SpecKit for branch control...\n');
@@ -120,7 +140,7 @@ export async function runPipeline(
           console.warn('⚠️ Could not auto-patch SpecKit scripts\n');
         }
       }
-      
+
       // Re-detect status after init
       status = detectProject();
     }
@@ -129,7 +149,7 @@ export async function runPipeline(
   // Step 1.5: Auto-create constitution if enabled and missing
   if (options.autoConstitution && !status.hasConstitution && description) {
     console.log('📜 No constitution found. Auto-creating based on project context...\n');
-    
+
     if (!options.dryRun) {
       const constitutionSuccess = await runConstitutionStep(tool, description, status.hasExistingCode, options);
       if (constitutionSuccess) {
@@ -145,9 +165,243 @@ export async function runPipeline(
     }
   }
 
+  const firstDesicion = await decide(
+    [
+      {
+        role: 'system',
+        content: `
+You are part of an AI development coding assistant. 
+You are an orchestrator that decidedes on the next steps to take in order to implement a software feature.
+The user prompts might make it sound like they you to implement the feature, but that is just for you to orchestrate. 
+
+This is the first step in determining how to proceed with the development workflow.
+The user has provided a description of what he wants to achieve through the AI development assistant.
+After this step is done we will move on to working on the development workflow itself and you'll then have tools at disposal to delegate this work to other agents.
+
+It could be that the user wants to 
+- Add a new feature
+- Create a completely new project/application/etc
+- Wants to continue from where the process left off
+- Wants to fix issues in the previous/current implementation
+- Wants to change something in the current implementation
+- Similar scenarios
+
+Your task is to:
+
+Determine if you have enough information to proceed to working on the development workflow or if you need to ask the user for a single clarifying question first.
+We won't have access to user input later, so for that reason we'll need to ask any clarifying questions now.
+If no clarifying questions are needed, we can just continue.
+
+You are NOT going to implement anything at this stage. The user isn't asking YOU to imlplement anything visually or similar. 
+You are the project lead and orchestrator. You will delegate the actual implementation work to other agents in the next steps of the workflow.
+Don't refuse to answer because it's out of scope or not part of your capabilites. Your capabilities are not an issue or limiting factor here.
+If you don't play ball and actually help with function calling you are failing in your role as an AI development assistant.
+The process is dependent on you to help move things forward.
+
+## OUTRAGEOUS PITFALLS TO AVOID:
+
+- Refusing to answer and cooperate
+- Not providing a tool call
+- Stating that this is out of scope or not within your capabilities; the coding will be handled by other agents that DO have these abilities
+
+## Requirements:
+
+- You MUST resond with a tool call.
+- No free form text responses.
+- Refusing to answer is not an option.
+- Stating that this is out of scope is not an option.
+- Consider all user prompts as relevant for software development, it is the context you're working with.
+
+## Context:
+
+- Current project status:
+- SpecKit initialized: ${status.hasSpeckit}
+- Constitution present: ${status.hasConstitution}
+- Specification present: ${status.hasSpec}
+- Plan present: ${status.hasPlan}
+- Tasks present: ${status.hasTasks}
+- Existing code present: ${status.hasExistingCode}
+- User description provided: ${description ? '✓' : '✗'}
+
+`
+
+      },
+      {
+        role: 'user',
+        content: description ?? 'No new feature description provided.',
+      }
+    ],
+    [
+      askUserFunction,
+      continueProcessFunction
+    ]
+  );
+
+  if (firstDesicion.status === 'failure') {
+    console.error('❌ Failed to determine next steps:', firstDesicion.content);
+    process.exit(1);
+  }
+
+  console.log(firstDesicion.content);
+
+  const messages: Message[] = [
+    {
+      role: 'system',
+      content: `
+You are part of an AI development coding assistant.
+
+You are an orchestrator that decides on the next steps to take in order to implement a software feature.
+Use the tools at your disposal to get information and perform actions.
+
+All coding tasks will be handled by other agents in the workflow.
+
+## Context:
+- SpecKit initialized: ${status.hasSpeckit}
+- Constitution present: ${status.hasConstitution}`
+    },
+    {
+      role: 'user',
+      content: description ?? 'No new feature description provided.',
+    }
+  ];
+
+  for (const toolCall of firstDesicion.tools) {
+    if (toolCall.function.name === 'ask_user') {
+      const reply = await askUserExec(toolCall.function.arguments['question'] + '\n');
+      if (reply.status === 'success') {
+
+        if (firstDesicion.content) messages.push({
+          role: 'assistant',
+          content: firstDesicion.content
+        });
+
+        messages.push({
+          role: 'tool',
+          tool_name: toolCall.function.name,
+          content: reply.content
+        })
+
+        console.log('\n✅ Received user input, continuing with the pipeline.');
+      } else {
+        console.error('❌ Failed to get user input:', reply.content);
+        process.exit(1);
+      }
+    }
+  }
+
+  let continue_work = true;
+
+  while (continue_work) {
+
+    const desicion = await decide(messages,
+      [
+        reiterateFunction,
+        endProcessFunction,
+        SpecifyFunction,
+        PlanFunction,
+        TaskFunction,
+        ImplementFunction,
+      ]
+    );
+
+    if (desicion.status === 'failure') {
+      console.error('❌ Failed to determine next steps:', desicion.content);
+      process.exit(1);
+    }
+
+    console.log('\n🤖 AI Decision:');
+    console.log(desicion.content);
+
+    if (desicion.content) messages.push({
+      role: 'assistant',
+      content: desicion.content
+    });
+
+    for (const toolCall of desicion.tools) {
+
+      let tool_content: string = '';
+      let tool_status:string = '';
+      let tool_output: string = '';
+
+      if (toolCall.function.name === 'reiterate_process') {
+        const reasoning = toolCall.function.arguments['reasoning'] || 'No reasoning provided.';
+
+        tool_content = reasoning;
+
+        break;
+      } else if (toolCall.function.name === 'specify_feature') {
+        const result = await specify(tool, toolCall.function.arguments['feature_description'], options.model);
+        tool_content = JSON.stringify(result);
+        tool_status = result.status;
+        tool_output = result.content;
+        // TODO : Handle other tool calls (plan, tasks, implement)
+      } else if (toolCall.function.name === 'end_process') {
+        continue_work = false;
+        console.log('✅ AI determined no further action is needed.');
+        completeHistoryEntry('success', 'AI determined no further action needed');
+        printSummary(summary);
+        return;
+      } else if (toolCall.function.name === 'plan_feature') {
+        const result = await plan(tool, toolCall.function.arguments['technical_requirements'], options.model);
+        tool_content = JSON.stringify(result);
+        tool_status = result.status;
+        tool_output = result.content;
+      } else if (toolCall.function.name === 'create_tasks') {
+        const result = await createTasks(tool, options.model);
+        tool_content = JSON.stringify(result);
+        tool_status = result.status;
+        tool_output = result.content;
+      } else if (toolCall.function.name === 'implement_feature') {
+        const result = await implement(tool, toolCall.function.arguments['special_considerations'], options.model);
+        tool_content = JSON.stringify(result);
+        tool_status = result.status;
+        tool_output = result.content;
+      } else if (toolCall.function.name === 'run_ai_command') {
+        const result = await runAICommandExec(
+          tool,
+          toolCall.function.arguments['prompt'],
+          options.model
+        );
+        tool_content = JSON.stringify(result);
+        tool_status = result.status;
+        tool_output = result.content;
+      } else if (toolCall.function.name === 'run_command') {
+        const result = await runCommandExec(
+          toolCall.function.arguments['command']
+        );
+        tool_content = JSON.stringify(result);
+        tool_status = result.status;
+        tool_output = result.content;
+      } else if (toolCall.function.name === 'verify_quality') {
+        const result = await runAICommandExec(
+          tool,
+          toolCall.function.arguments['prompt'],
+          options.model
+        );
+        tool_content = JSON.stringify(result);
+        tool_status = result.status;
+        tool_output = result.content;
+      }
+      else {
+        console.warn(`⚠️ Unknown tool call: ${toolCall.function.name}`);
+        tool_content = `⚠️ Unknown tool call: ${toolCall.function.name}`;
+      }
+
+      console.log(`\n🛠 Tool Call: ${toolCall.function.name}`);
+      console.log(`Status: ${tool_status}`);
+      console.log(tool_output);
+
+      messages.push({
+        role: 'tool',
+        tool_name: toolCall.function.name,
+        content: tool_content
+      });
+    }
+  }
+
   // Determine what steps to run
   const steps = determineSteps(status, description);
-  
+
   if (steps.length === 0) {
     console.log('✅ Nothing to do. Provide a description to start a new feature.');
     printSummary(summary);
@@ -166,35 +420,44 @@ export async function runPipeline(
   }
 
   // Step 2: Execute speckit workflow steps (skip init and verify - handled separately)
-  const agentSteps = steps.filter((s): s is AgentStep => 
+  const agentSteps = steps.filter((s): s is AgentStep =>
     s !== 'init' && s !== 'verify'
   );
-  
+
   for (const step of agentSteps) {
     // Track that we're starting this step
     markStepStarted(step);
-    
+
     const prompt = buildPrompt(step, description, options.currentBranchOnly);
+
+    // Record in history
+    recordStepStart(step as StepName, prompt);
+
     console.log(`\n⚡ Running: ${step}`);
     console.log(`   Command: ${tool} -p "${STEP_AGENTS[step]} ..."${options.model ? ` --model ${options.model}` : ''}`);
     console.log('');
-    
+
     const success = await runAICommand(tool, prompt, {
       verbose: options.verbose,
       model: options.model,
       autoApprove: options.autoApprove ?? true,
       currentBranchOnly: options.currentBranchOnly,
     });
-    
+
     if (!success) {
+      // Record failure in history
+      recordStepComplete(step as StepName, 'failed', 'Step execution failed');
+      completeHistoryEntry('failed');
+
       summary.stepsFailed.push(step);
       console.error(`\n❌ Step "${step}" failed. Fix issues and run "sokold --continue" to retry.`);
       printSummary(summary);
       process.exit(1);
     }
-    
+
     // Track completion
     markStepCompleted(step);
+    recordStepComplete(step as StepName, 'success');
     summary.stepsCompleted.push(step);
     console.log(`✓ ${step} completed`);
   }
@@ -202,31 +465,46 @@ export async function runPipeline(
   // Step 3: Verify and fix loop
   if (steps.includes('implement')) {
     console.log('\n🔍 Verifying implementation...\n');
-    
+
+    recordStepStart('verify');
+
     let verified = false;
     let attempts = 0;
-    
+
     while (!verified && attempts < maxRetries) {
       const verifySuccess = await runVerification(tool, options);
-      
+
       if (verifySuccess) {
         verified = true;
+        recordStepComplete('verify', 'success');
         summary.stepsCompleted.push('verify');
         console.log('✓ Verification passed');
       } else {
         attempts++;
         summary.fixAttempts = attempts;
-        
+        recordFixAttempt();
+
         if (attempts < maxRetries) {
           console.log(`\n🔧 Issues found. Attempting fix (${attempts}/${maxRetries})...\n`);
+          recordStepStart('fix');
           await runFixAttempt(tool, options);
+          recordStepComplete('fix', 'success');
         } else {
           console.log(`\n⚠️ Max fix attempts reached (${maxRetries}). Manual review may be needed.`);
+          recordStepComplete('verify', 'failed', 'Max fix attempts reached');
           summary.stepsFailed.push('verify');
         }
       }
     }
   }
+
+  // Complete history entry
+  const outcome = summary.stepsFailed.length === 0
+    ? 'success'
+    : summary.stepsCompleted.length > 0
+      ? 'partial'
+      : 'failed';
+  completeHistoryEntry(outcome);
 
   summary.endTime = new Date();
   console.log('\n✅ Pipeline completed!\n');
@@ -241,21 +519,21 @@ function determineSteps(status: ReturnType<typeof detectProject>, description?: 
   if (description) {
     return ['specify', 'plan', 'tasks', 'implement', 'verify'];
   }
-  
+
   // Continue from where we left off - first check state, then fall back to file detection
   const allSteps: Step[] = ['specify', 'plan', 'tasks', 'implement', 'verify'];
-  
+
   // Check state first (more reliable)
   const stateNextStep = getNextStepFromState();
   if (stateNextStep) {
     const startIndex = allSteps.indexOf(stateNextStep);
     return allSteps.slice(startIndex);
   }
-  
+
   // Fall back to file-based detection
   const nextStep = getNextStep(status, false);
   if (!nextStep) return [];
-  
+
   const startIndex = allSteps.indexOf(nextStep as Step);
   return allSteps.slice(startIndex);
 }
@@ -268,18 +546,18 @@ type AgentStep = 'specify' | 'plan' | 'tasks' | 'implement';
  */
 function buildPrompt(step: AgentStep, description?: string, currentBranchOnly?: boolean): string {
   const agent = STEP_AGENTS[step];
-  
+
   // Add current-branch-only instructions when enabled
-  const branchInstructions = currentBranchOnly 
+  const branchInstructions = currentBranchOnly
     ? `
 
 IMPORTANT: Current-branch-only mode is enabled. Do NOT create new git branches. Do NOT run any git checkout or git branch commands. Work entirely on the current branch. Place all specification files in specs/main/ directory instead of creating numbered directories like specs/001-feature-name/. Skip any branch-related setup scripts.`
     : '';
-  
+
   if (step === 'specify' && description) {
     return `${agent} ${description}${branchInstructions}`;
   }
-  
+
   // Other steps just invoke the agent - it reads context from specs/
   return `${agent}${branchInstructions}`;
 }
@@ -302,20 +580,20 @@ async function runAICommand(
   return new Promise((resolve) => {
     // Build command flags
     const flags: string[] = [];
-    
+
     // Auto-approve flag (tool-specific)
     if (options.autoApprove !== false) {
       flags.push(tool === 'copilot' ? '--allow-all-tools' : '--dangerously-skip-permissions');
     }
-    
+
     // Model flag (tool-specific)
     if (options.model) {
       flags.push(`--model ${options.model}`);
     }
-    
+
     const escapedPrompt = prompt.replace(/"/g, '\\"');
     const fullCommand = `${tool} ${flags.join(' ')} -p "${escapedPrompt}"`.trim();
-    
+
     // Always show the full command being run
     console.log(`   $ ${fullCommand}`);
     console.log('');
@@ -355,7 +633,7 @@ export async function runSpecifyInit(
   return new Promise((resolve) => {
     const aiFlag = tool === 'copilot' ? 'copilot' : 'claude';
     const command = `specify init --here --ai ${aiFlag} --force`;
-    
+
     if (verbose) {
       console.log(`   $ ${command}`);
     }
@@ -388,7 +666,7 @@ async function runConstitutionStep(
   options: PipelineOptions
 ): Promise<boolean> {
   let prompt: string;
-  
+
   if (hasExistingCode) {
     // Existing project - analyze it to create constitution
     prompt = `${STEP_AGENTS.constitution} Analyze this existing project and create a constitution based on:
@@ -413,7 +691,7 @@ Keep the constitution concise but set a solid foundation for the project.`;
 
   console.log(`\n⚡ Running: constitution (auto-generate)`);
   console.log(`   Context: ${hasExistingCode ? 'Analyzing existing project' : 'Creating from feature description'}`);
-  
+
   return runAICommand(tool, prompt, {
     verbose: options.verbose,
     model: options.model,
@@ -464,32 +742,32 @@ Make the necessary changes to fix all problems.`;
  * Print execution summary
  */
 function printSummary(summary: ExecutionSummary): void {
-  const duration = summary.endTime 
+  const duration = summary.endTime
     ? Math.round((summary.endTime.getTime() - summary.startTime.getTime()) / 1000)
     : Math.round((new Date().getTime() - summary.startTime.getTime()) / 1000);
-  
+
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📊 EXECUTION SUMMARY');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  
+
   if (summary.stepsCompleted.length > 0) {
     console.log('\n✅ Completed steps:');
     for (const step of summary.stepsCompleted) {
       console.log(`   • ${step}`);
     }
   }
-  
+
   if (summary.stepsFailed.length > 0) {
     console.log('\n❌ Failed steps:');
     for (const step of summary.stepsFailed) {
       console.log(`   • ${step}`);
     }
   }
-  
+
   if (summary.fixAttempts > 0) {
     console.log(`\n🔧 Fix attempts: ${summary.fixAttempts}`);
   }
-  
+
   console.log(`\n⏱️  Duration: ${duration}s`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }

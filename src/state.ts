@@ -28,6 +28,9 @@ export interface PipelineState {
   
   /** Last updated timestamp */
   updatedAt: string;
+  
+  /** ID of the associated history entry (for linking state to history) */
+  historyRunId?: string;
 }
 
 const STATE_DIR = '.sokold';

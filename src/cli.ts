@@ -31,6 +31,13 @@ import {
   loadState,
   getNextStepFromState,
 } from './state.js';
+import {
+  getRecentHistory,
+  getHistoryEntry,
+  formatHistory,
+  formatHistoryEntry,
+  addRunNote,
+} from './history.js';
 
 interface Args {
   description?: string;
@@ -46,6 +53,9 @@ interface Args {
   configKey?: string;
   configValue?: string;
   speckitCommand?: 'patch' | 'unpatch' | 'status';
+  historyCommand?: 'list' | 'show' | 'note';
+  historyIndex?: number;
+  historyNote?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -91,6 +101,34 @@ function parseArgs(argv: string[]): Args {
         args.speckitCommand = subCmd;
       } else {
         args.speckitCommand = 'status'; // default to status if no valid subcommand
+      }
+      continue;
+    }
+    
+    // Handle 'history' subcommand (sokold history [index] / sokold history note <text>)
+    if (arg === 'history' && i === 2) {
+      const nextArg = argv[i + 1];
+      if (nextArg === 'note') {
+        args.historyCommand = 'note';
+        i++; // skip 'note'
+        // Collect rest as note text
+        const noteArgs: string[] = [];
+        while (i + 1 < argv.length) {
+          noteArgs.push(argv[++i]);
+        }
+        args.historyNote = noteArgs.join(' ');
+      } else if (nextArg && !nextArg.startsWith('-')) {
+        // Numeric index for show
+        const idx = parseInt(nextArg, 10);
+        if (!isNaN(idx)) {
+          args.historyCommand = 'show';
+          args.historyIndex = idx;
+          i++; // skip the index
+        } else {
+          args.historyCommand = 'list';
+        }
+      } else {
+        args.historyCommand = 'list';
       }
       continue;
     }
@@ -173,6 +211,11 @@ Config Commands:
   sokold config set <key> <val>   Set a specific setting
   sokold config path              Show config file path
 
+History Commands:
+  sokold history                  Show recent run history
+  sokold history <n>              Show details of run #n (0 = most recent)
+  sokold history note <text>      Add a note to the most recent run
+
 SpecKit Commands:
   sokold speckit patch            Patch SpecKit scripts for branch control
   sokold speckit unpatch          Remove patches, restore original scripts
@@ -194,6 +237,8 @@ Examples:
   sokold --continue                        # Resume work on current feature
   sokold status                            # Check project status
   sokold set tool claude                   # Switch to Claude
+  sokold history                           # View recent runs
+  sokold history 0                         # Details of the last run
 `);
 }
 
@@ -343,6 +388,50 @@ function handleSpeckitCommand(args: Args): void {
   }
 }
 
+function handleHistoryCommand(args: Args): void {
+  switch (args.historyCommand) {
+    case 'list': {
+      console.log('\n🧊 SOKOLd - Run History\n');
+      const entries = getRecentHistory(10);
+      if (entries.length === 0) {
+        console.log('No history entries yet. Run a feature to create history.\n');
+      } else {
+        console.log(formatHistory(entries, args.verbose ?? false));
+        console.log(`Showing ${entries.length} most recent runs.`);
+        console.log('Use "sokold history <n>" to see details (0 = most recent).\n');
+      }
+      break;
+    }
+    case 'show': {
+      const index = args.historyIndex ?? 0;
+      const entry = getHistoryEntry(index);
+      if (!entry) {
+        console.error(`No history entry at index ${index}.`);
+        const entries = getRecentHistory(1);
+        if (entries.length === 0) {
+          console.error('No history entries found.');
+        } else {
+          console.error(`Valid indices: 0-${entries.length - 1}`);
+        }
+        process.exit(1);
+      }
+      console.log('\n🧊 SOKOLd - Run Details\n');
+      console.log(formatHistoryEntry(entry, true));
+      console.log('');
+      break;
+    }
+    case 'note': {
+      if (!args.historyNote) {
+        console.error('Usage: sokold history note <text>');
+        process.exit(1);
+      }
+      addRunNote(args.historyNote);
+      console.log(`✓ Note added to most recent run.`);
+      break;
+    }
+  }
+}
+
 async function handleInit(args: Args): Promise<void> {
   const config = loadConfig();
   const tool = args.tool ?? config.tool;
@@ -432,6 +521,11 @@ async function main(): Promise<void> {
   
   if (args.speckitCommand) {
     handleSpeckitCommand(args);
+    return;
+  }
+  
+  if (args.historyCommand) {
+    handleHistoryCommand(args);
     return;
   }
   
