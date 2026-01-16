@@ -12,23 +12,16 @@
  * 5. Generate summary of what was done
  */
 import { spawn } from 'child_process';
-import { detectProject, getNextStep } from './detect.js';
+import { detectProject } from './detect.js';
 import { patchSpeckit } from './speckit-patch.js';
 import {
   initState,
-  markStepStarted,
-  markStepCompleted,
-  getNextStepFromState,
   clearState,
   type PipelineStep,
 } from './state.js';
 import {
   startHistoryEntry,
-  recordStepStart,
-  recordStepComplete,
-  recordFixAttempt,
   completeHistoryEntry,
-  type StepName,
 } from './history.js';
 import { decide } from './ollama.js';
 import { askUserExec, askUserFunction, continueProcessFunction, endProcessFunction, reiterateFunction, runAICommandExec, runCommandExec } from './functions/misc.js';
@@ -74,7 +67,6 @@ export async function runPipeline(
   options: PipelineOptions = {}
 ): Promise<void> {
   const tool = options.tool ?? 'copilot';
-  const maxRetries = options.maxRetries ?? 3;
   let status = detectProject();
 
   // Initialize or load state
@@ -399,168 +391,8 @@ All coding tasks will be handled by other agents in the workflow.
     }
   }
 
-  // Determine what steps to run
-  const steps = determineSteps(status, description);
-
-  if (steps.length === 0) {
-    console.log('✅ Nothing to do. Provide a description to start a new feature.');
-    printSummary(summary);
-    return;
-  }
-
-  console.log('📋 Execution plan:');
-  for (const step of steps) {
-    console.log(`   → ${step}`);
-  }
-  console.log('');
-
-  if (options.dryRun) {
-    console.log('🔸 Dry run - no commands will be executed');
-    return;
-  }
-
-  // Step 2: Execute speckit workflow steps (skip init and verify - handled separately)
-  const agentSteps = steps.filter((s): s is AgentStep =>
-    s !== 'init' && s !== 'verify'
-  );
-
-  for (const step of agentSteps) {
-    // Track that we're starting this step
-    markStepStarted(step);
-
-    const prompt = buildPrompt(step, description, options.currentBranchOnly);
-
-    // Record in history
-    recordStepStart(step as StepName, prompt);
-
-    console.log(`\n⚡ Running: ${step}`);
-    console.log(`   Command: ${tool} -p "${STEP_AGENTS[step]} ..."${options.model ? ` --model ${options.model}` : ''}`);
-    console.log('');
-
-    const success = await runAICommand(tool, prompt, {
-      verbose: options.verbose,
-      model: options.model,
-      autoApprove: options.autoApprove ?? true,
-      currentBranchOnly: options.currentBranchOnly,
-    });
-
-    if (!success) {
-      // Record failure in history
-      recordStepComplete(step as StepName, 'failed', 'Step execution failed');
-      completeHistoryEntry('failed');
-
-      summary.stepsFailed.push(step);
-      console.error(`\n❌ Step "${step}" failed. Fix issues and run "sokold --continue" to retry.`);
-      printSummary(summary);
-      process.exit(1);
-    }
-
-    // Track completion
-    markStepCompleted(step);
-    recordStepComplete(step as StepName, 'success');
-    summary.stepsCompleted.push(step);
-    console.log(`✓ ${step} completed`);
-  }
-
-  // Step 3: Verify and fix loop
-  if (steps.includes('implement')) {
-    console.log('\n🔍 Verifying implementation...\n');
-
-    recordStepStart('verify');
-
-    let verified = false;
-    let attempts = 0;
-
-    while (!verified && attempts < maxRetries) {
-      const verifySuccess = await runVerification(tool, options);
-
-      if (verifySuccess) {
-        verified = true;
-        recordStepComplete('verify', 'success');
-        summary.stepsCompleted.push('verify');
-        console.log('✓ Verification passed');
-      } else {
-        attempts++;
-        summary.fixAttempts = attempts;
-        recordFixAttempt();
-
-        if (attempts < maxRetries) {
-          console.log(`\n🔧 Issues found. Attempting fix (${attempts}/${maxRetries})...\n`);
-          recordStepStart('fix');
-          await runFixAttempt(tool, options);
-          recordStepComplete('fix', 'success');
-        } else {
-          console.log(`\n⚠️ Max fix attempts reached (${maxRetries}). Manual review may be needed.`);
-          recordStepComplete('verify', 'failed', 'Max fix attempts reached');
-          summary.stepsFailed.push('verify');
-        }
-      }
-    }
-  }
-
-  // Complete history entry
-  const outcome = summary.stepsFailed.length === 0
-    ? 'success'
-    : summary.stepsCompleted.length > 0
-      ? 'partial'
-      : 'failed';
-  completeHistoryEntry(outcome);
-
-  summary.endTime = new Date();
-  console.log('\n✅ Pipeline completed!\n');
-  printSummary(summary);
 }
 
-/**
- * Determine which steps need to run
- */
-function determineSteps(status: ReturnType<typeof detectProject>, description?: string): Step[] {
-  // New feature - run full pipeline with verify
-  if (description) {
-    return ['specify', 'plan', 'tasks', 'implement', 'verify'];
-  }
-
-  // Continue from where we left off - first check state, then fall back to file detection
-  const allSteps: Step[] = ['specify', 'plan', 'tasks', 'implement', 'verify'];
-
-  // Check state first (more reliable)
-  const stateNextStep = getNextStepFromState();
-  if (stateNextStep) {
-    const startIndex = allSteps.indexOf(stateNextStep);
-    return allSteps.slice(startIndex);
-  }
-
-  // Fall back to file-based detection
-  const nextStep = getNextStep(status, false);
-  if (!nextStep) return [];
-
-  const startIndex = allSteps.indexOf(nextStep as Step);
-  return allSteps.slice(startIndex);
-}
-
-/** Steps that use speckit agents */
-type AgentStep = 'specify' | 'plan' | 'tasks' | 'implement';
-
-/**
- * Build the prompt for a given step
- */
-function buildPrompt(step: AgentStep, description?: string, currentBranchOnly?: boolean): string {
-  const agent = STEP_AGENTS[step];
-
-  // Add current-branch-only instructions when enabled
-  const branchInstructions = currentBranchOnly
-    ? `
-
-IMPORTANT: Current-branch-only mode is enabled. Do NOT create new git branches. Do NOT run any git checkout or git branch commands. Work entirely on the current branch. Place all specification files in specs/main/ directory instead of creating numbered directories like specs/001-feature-name/. Skip any branch-related setup scripts.`
-    : '';
-
-  if (step === 'specify' && description) {
-    return `${agent} ${description}${branchInstructions}`;
-  }
-
-  // Other steps just invoke the agent - it reads context from specs/
-  return `${agent}${branchInstructions}`;
-}
 
 /**
  * Run an AI CLI command and stream output
@@ -693,44 +525,6 @@ Keep the constitution concise but set a solid foundation for the project.`;
   console.log(`   Context: ${hasExistingCode ? 'Analyzing existing project' : 'Creating from feature description'}`);
 
   return runAICommand(tool, prompt, {
-    verbose: options.verbose,
-    model: options.model,
-    autoApprove: options.autoApprove ?? true,
-    currentBranchOnly: options.currentBranchOnly,
-  });
-}
-
-/**
- * Run verification step - check for errors, run tests/build/lint via AI
- */
-async function runVerification(
-  tool: 'copilot' | 'claude',
-  options: PipelineOptions
-): Promise<boolean> {
-  const verifyPrompt = `Check this project for errors. Run the build, tests, and linting. 
-Report any issues found. If everything passes, respond with "All checks passed".
-If there are errors, list them clearly so they can be fixed.`;
-
-  return runAICommand(tool, verifyPrompt, {
-    verbose: options.verbose,
-    model: options.model,
-    autoApprove: options.autoApprove ?? true,
-    currentBranchOnly: options.currentBranchOnly,
-  });
-}
-
-/**
- * Run fix attempt - ask AI to fix any issues found
- */
-async function runFixAttempt(
-  tool: 'copilot' | 'claude',
-  options: PipelineOptions
-): Promise<boolean> {
-  const fixPrompt = `There were errors in the previous verification. 
-Please analyze the errors, fix all issues, and ensure the code compiles, tests pass, and linting is clean.
-Make the necessary changes to fix all problems.`;
-
-  return runAICommand(tool, fixPrompt, {
     verbose: options.verbose,
     model: options.model,
     autoApprove: options.autoApprove ?? true,
