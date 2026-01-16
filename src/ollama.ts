@@ -1,7 +1,7 @@
 import ollama from 'ollama';
 import { Tool, ToolCall, Message } from 'ollama';
 
-export async function decide(messages: Message[],tools: Tool[], model: string = 'functiongemma'): Promise<DesicionResponse> {
+export async function decide(messages: Message[],tools: Tool[], model: string = 'rnj-1'): Promise<DesicionResponse> {
 
     console.log('Deciding next action using model:', model);
 
@@ -10,10 +10,6 @@ export async function decide(messages: Message[],tools: Tool[], model: string = 
         messages: messages,
         tools: tools
     });
-
-    console.log('Ollama response done reason:', response.done_reason);
-    console.log(response);
-    console.log(response.message.tool_calls);
 
     const desicion : DesicionResponse = {
         status: response.done_reason === 'stop' ? 'success' : 'failure',
