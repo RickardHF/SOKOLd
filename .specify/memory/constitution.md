@@ -1,11 +1,14 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version: 1.0.0 → 1.0.1
-Rationale: Clarification of local-only development workflow
+Version: 1.0.1 → 1.1.0
+Rationale: Architecture evolution to support Ollama and state/history tracking
 
 Changes:
-- Development Workflow: Clarified local-only branching (no remote repository required)
+- Architecture: Removed 4-file constraint, now modular architecture with clear separation
+- Dependencies: Added ollama package for local AI inference
+- Features: Added state tracking (.sokold/state.yaml) and history tracking (.sokold/history.yaml)
+- Workflow: Local-first AI inference with Ollama
 
 Templates Status:
 ✅ plan-template.md - Constitution Check section aligns
@@ -88,7 +91,8 @@ Start with the simplest implementation that solves the problem. Follow YAGNI (Yo
 Gonna Need It): avoid premature abstraction. Prefer standard library functions over
 third-party dependencies when reasonable. Configuration MUST use conventional files
 (.specifyrc, config files in XDG directories, etc.). Avoid reinventing conventions that
-already exist in the ecosystem.
+already exist in the ecosystem. When complexity is necessary for features like state
+tracking or history, encapsulate it in dedicated modules.
 
 **Rationale**: Simple code is maintainable code. CLI tools should be lightweight and
 predictable, leveraging ecosystem standards rather than inventing new patterns.
@@ -140,4 +144,4 @@ upon merge.
 **Living Document**: This constitution evolves with the project. Template validation ensures
 consistency between constitution and workflow artifacts (plan, spec, tasks templates).
 
-**Version**: 1.0.1 | **Ratified**: 2026-01-07 | **Last Amended**: 2026-01-07
+**Version**: 1.1.0 | **Ratified**: 2026-01-07 | **Last Amended**: 2026-01-16

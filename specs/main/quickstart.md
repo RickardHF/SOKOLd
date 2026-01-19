@@ -1,10 +1,12 @@
 # Quickstart: SOKOLd CLI
 
-**SOKOLd** is a thin CLI orchestrator that runs AI CLI tools to execute SpecKit workflows.
+**SOKOLd** is a CLI orchestrator that uses local Ollama models to coordinate SpecKit workflows.
 
 ## Prerequisites
 
 - Node.js 18+
+- **Ollama** installed and running
+  - Default model: `rnj-1` (can be customized)
 - One of: `copilot` CLI (GitHub Copilot) or `claude` CLI (Anthropic Claude)
 - `specify` CLI (SpecKit)
 
@@ -20,6 +22,12 @@ cd local-agentic
 npm install
 npm run build
 npm link
+
+# Ensure Ollama is running
+ollama serve
+
+# Pull the required model (if not already available)
+ollama pull rnj-1
 ```
 
 ## Quick Start
@@ -91,13 +99,37 @@ sokold --status
 | `output.colors` | true, false | true | Terminal colors |
 | `output.format` | human, json | human | Output format |
 | `workflow.currentBranchOnly` | true, false | false | Stay on current branch |
+| `workflow.autoConstitution` | true, false | false | Auto-create constitution (experimental) |
 
 ## How It Works
 
-SOKOLd is a **thin orchestrator** - it doesn't manipulate files directly. Instead, it:
+SOKOLd uses **Ollama for local AI inference** to coordinate the workflow:
 
-1. **Detects** project state (checks for `.specify/`, `specs/`, etc.)
-2. **Spawns** the configured AI CLI (`copilot` or `claude`) with SpecKit agent prompts
+1. **Checks** Ollama availability and required model
+2. **Detects** project state (checks for `.specify/`, `specs/`, etc.)
+3. **Spawns** the configured AI CLI (`copilot` or `claude`) with SpecKit agent prompts
+4. **Tracks** state in `.sokold/state.yaml` for resumption support
+5. **Records** history in `.sokold/history.yaml` for context and review
+6. **Sequences** the workflow: specify → plan → tasks → implement
+7. **Verifies** implementation via AI and retries fixes if needed
+8. **Reports** what was done
+
+All file operations are performed by the AI CLI, not SOKOLd.
+
+## History Commands
+
+SOKOLd tracks all pipeline runs:
+
+```bash
+# View recent run history
+sokold history
+
+# View details of a specific run (0 = most recent)
+sokold history 0
+
+# Add a note to the most recent run
+sokold history note "Fixed auth bug, needs review"
+```
 3. **Sequences** the workflow: specify → plan → tasks → implement
 4. **Verifies** implementation via AI and retries fixes if needed
 5. **Reports** what was done
@@ -120,6 +152,22 @@ sokold "Add new feature"
 ```
 
 ## Troubleshooting
+
+### "Ollama not running"
+
+Make sure Ollama is running:
+
+```bash
+ollama serve
+```
+
+### "Model not available"
+
+SOKOLd will prompt to pull the model if missing. You can also pull manually:
+
+```bash
+ollama pull rnj-1
+```
 
 ### "AI CLI not found"
 
@@ -147,3 +195,17 @@ SOKOLd retries fixes up to 3 times. If issues persist:
 1. Check the AI output for specific errors
 2. Fix issues manually
 3. Run `sokold --continue` to resume
+
+### "Pipeline interrupted"
+
+Your progress is saved! Run:
+
+```bash
+sokold --continue
+```
+
+Or check what was completed:
+
+```bash
+sokold status
+sokold history 0

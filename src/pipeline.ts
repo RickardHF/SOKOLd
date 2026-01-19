@@ -17,13 +17,20 @@ import { patchSpeckit } from './speckit-patch.js';
 import {
   initState,
   clearState,
+  loadState,
+  markStepStarted,
+  markStepCompleted,
   type PipelineStep,
 } from './state.js';
 import {
   startHistoryEntry,
   completeHistoryEntry,
+  recordStepStart,
+  recordStepComplete,
+  buildHistoryContext,
+  getActiveRun,
 } from './history.js';
-import { decide } from './ollama.js';
+import { decide, ensureOllamaReady, DEFAULT_MODEL } from './ollama.js';
 import { askUserExec, askUserFunction, continueProcessFunction, endProcessFunction, reiterateFunction, runAICommandExec, runCommandExec } from './functions/misc.js';
 import { Message } from 'ollama';
 import { createTasks, implement, ImplementFunction, plan, PlanFunction, specify, SpecifyFunction, TaskFunction } from './functions/speckit.js';
@@ -67,6 +74,19 @@ export async function runPipeline(
   options: PipelineOptions = {}
 ): Promise<void> {
   const tool = options.tool ?? 'copilot';
+  const maxRetries = options.maxRetries ?? 3;
+  let retries = 0;
+  
+  // Check Ollama installation and model availability first
+  console.log('🔍 Checking Ollama setup...');
+  const ollamaStatus = await ensureOllamaReady(DEFAULT_MODEL);
+  
+  if (!ollamaStatus.ready) {
+    console.error(`\n❌ ${ollamaStatus.error}`);
+    process.exit(1);
+  }
+  console.log(`✅ Ollama ready with model "${DEFAULT_MODEL}"\n`);
+
   let status = detectProject();
 
   // Initialize or load state
@@ -157,6 +177,11 @@ export async function runPipeline(
     }
   }
 
+  // Build history context for AI prompts
+  const historyContext = buildHistoryContext();
+  const currentState = loadState();
+  const activeRun = getActiveRun();
+
   const firstDesicion = await decide(
     [
       {
@@ -215,6 +240,15 @@ The process is dependent on you to help move things forward.
 - Existing code present: ${status.hasExistingCode}
 - User description provided: ${description ? '✓' : '✗'}
 
+${currentState ? `## Current Pipeline State:
+- Started at: ${currentState.startedAt}
+- Last completed step: ${currentState.lastCompletedStep || 'none'}
+- Completed steps: ${currentState.completedSteps.join(', ') || 'none'}
+- Current step in progress: ${currentState.currentStep || 'none'}\n` : ''}
+${activeRun ? `## Active Run:
+- Run ID: ${activeRun.id}
+- Steps executed: ${activeRun.steps.map(s => `${s.step}(${s.outcome})`).join(', ') || 'none'}\n` : ''}
+${historyContext ? `\n${historyContext}\n` : ''}
 `
 
       },
@@ -249,7 +283,16 @@ All coding tasks will be handled by other agents in the workflow.
 
 ## Context:
 - SpecKit initialized: ${status.hasSpeckit}
-- Constitution present: ${status.hasConstitution}`
+- Constitution present: ${status.hasConstitution}
+- Specification present: ${status.hasSpec}
+- Plan present: ${status.hasPlan}
+- Tasks present: ${status.hasTasks}
+
+${currentState ? `## Current Pipeline State:
+- Started at: ${currentState.startedAt}
+- Last completed step: ${currentState.lastCompletedStep || 'none'}
+- Completed steps: ${currentState.completedSteps.join(', ') || 'none'}\n` : ''}
+${historyContext ? `\n${historyContext}\n` : ''}`
     },
     {
       role: 'user',
@@ -298,8 +341,21 @@ All coding tasks will be handled by other agents in the workflow.
 
     if (desicion.status === 'failure') {
       console.error('❌ Failed to determine next steps:', desicion.content);
-      process.exit(1);
+      
+      retries++;
+      if (retries >= maxRetries) {
+        console.error('❌ Maximum retry attempts reached. Exiting.');
+        process.exit(1);
+      }
+
+      messages.push({
+        role: 'agent',
+        content: `Error determining next steps: ${desicion.content}. Retrying attempt ${retries} of ${maxRetries}.`
+      });
+      continue;
     }
+
+    retries = 0;
 
     console.log('\n🤖 AI Decision:');
     console.log(desicion.content);
@@ -322,11 +378,24 @@ All coding tasks will be handled by other agents in the workflow.
 
         break;
       } else if (toolCall.function.name === 'specify_feature') {
+        // Track step in state and history
+        markStepStarted('specify');
+        recordStepStart('specify', toolCall.function.arguments['feature_description']);
+        
         const result = await specify(tool, toolCall.function.arguments['feature_description'], options.model);
         tool_content = JSON.stringify(result);
         tool_status = result.status;
         tool_output = result.content;
-        // TODO : Handle other tool calls (plan, tasks, implement)
+        
+        // Record step completion
+        if (result.status === 'success') {
+          markStepCompleted('specify');
+          recordStepComplete('specify', 'success');
+          summary.stepsCompleted.push('specify');
+        } else {
+          recordStepComplete('specify', 'failed', result.content);
+          summary.stepsFailed.push('specify');
+        }
       } else if (toolCall.function.name === 'end_process') {
         continue_work = false;
         console.log('✅ AI determined no further action is needed.');
@@ -334,20 +403,62 @@ All coding tasks will be handled by other agents in the workflow.
         printSummary(summary);
         return;
       } else if (toolCall.function.name === 'plan_feature') {
+        // Track step in state and history
+        markStepStarted('plan');
+        recordStepStart('plan', toolCall.function.arguments['technical_requirements']);
+        
         const result = await plan(tool, toolCall.function.arguments['technical_requirements'], options.model);
         tool_content = JSON.stringify(result);
         tool_status = result.status;
         tool_output = result.content;
+        
+        // Record step completion
+        if (result.status === 'success') {
+          markStepCompleted('plan');
+          recordStepComplete('plan', 'success');
+          summary.stepsCompleted.push('plan');
+        } else {
+          recordStepComplete('plan', 'failed', result.content);
+          summary.stepsFailed.push('plan');
+        }
       } else if (toolCall.function.name === 'create_tasks') {
+        // Track step in state and history
+        markStepStarted('tasks');
+        recordStepStart('tasks');
+        
         const result = await createTasks(tool, options.model);
         tool_content = JSON.stringify(result);
         tool_status = result.status;
         tool_output = result.content;
+        
+        // Record step completion
+        if (result.status === 'success') {
+          markStepCompleted('tasks');
+          recordStepComplete('tasks', 'success');
+          summary.stepsCompleted.push('tasks');
+        } else {
+          recordStepComplete('tasks', 'failed', result.content);
+          summary.stepsFailed.push('tasks');
+        }
       } else if (toolCall.function.name === 'implement_feature') {
+        // Track step in state and history
+        markStepStarted('implement');
+        recordStepStart('implement', toolCall.function.arguments['special_considerations']);
+        
         const result = await implement(tool, toolCall.function.arguments['special_considerations'], options.model);
         tool_content = JSON.stringify(result);
         tool_status = result.status;
         tool_output = result.content;
+        
+        // Record step completion
+        if (result.status === 'success') {
+          markStepCompleted('implement');
+          recordStepComplete('implement', 'success');
+          summary.stepsCompleted.push('implement');
+        } else {
+          recordStepComplete('implement', 'failed', result.content);
+          summary.stepsFailed.push('implement');
+        }
       } else if (toolCall.function.name === 'run_ai_command') {
         const result = await runAICommandExec(
           tool,

@@ -8,7 +8,7 @@
 
 # SOKOLd - AI-Powered Code Generation CLI
 
-Transform natural language descriptions into working code with a single command. SOKOLd uses [SpecKit](https://github.com/github/spec-kit) agents under the hood to handle the complete workflow—from specification through implementation.
+Transform natural language descriptions into working code with a single command. SOKOLd uses local Ollama models combined with [SpecKit](https://github.com/github/spec-kit) agents to handle the complete workflow—from specification through implementation.
 
 ## Quick Start
 
@@ -27,11 +27,12 @@ sokold "Add a REST API endpoint for user authentication with JWT"
 # ✓ Implements the feature
 # ✓ Runs verification checks
 # ✓ Auto-fixes issues (up to 3 attempts)
+# ✓ Tracks history for future reference
 ```
 
 ## How It Works
 
-SOKOLd orchestrates SpecKit agents in a pipeline:
+SOKOLd uses Ollama for local AI inference and orchestrates SpecKit agents in a pipeline:
 
 1. **Specify** → Generate a detailed specification from your description
 2. **Plan** → Create an implementation plan
@@ -80,6 +81,7 @@ sokold "Add feature X" --model gpt-4
 ### Check Status
 
 ```bash
+sokold status
 sokold --status
 sokold -s
 ```
@@ -89,6 +91,21 @@ Shows:
 - What specification files exist (`spec.md`, `plan.md`, `tasks.md`)
 - Pipeline state (what steps have been completed, what's next)
 - What the next step would be
+
+### History
+
+SOKOLd tracks all pipeline runs so you can review past work:
+
+```bash
+# View recent run history
+sokold history
+
+# View details of a specific run (0 = most recent)
+sokold history 0
+
+# Add a note to the most recent run
+sokold history note "Fixed auth bug, needs review"
+```
 
 ### Configuration
 
@@ -115,12 +132,13 @@ sokold config path
 | Key | Description | Values |
 |-----|-------------|--------|
 | `tool` | AI CLI tool to use | `copilot`, `claude` |
-| `model` | Model to use | e.g., `gpt-4`, `claude-3-opus` |
+| `model` | Model to use (code generation etc) | e.g., `gpt-4`, `claude-3-opus` |
 | `autoApprove` | Auto-approve all tool calls | `true`, `false` |
 | `verbose` | Show verbose output | `true`, `false` |
 | `output.colors` | Enable colored output | `true`, `false` |
 | `output.format` | Output format | `human`, `json` |
 | `workflow.currentBranchOnly` | Stay on current branch (no feature branches) | `true`, `false` |
+| `workflow.autoConstitution` | Auto-create constitution if missing (experimental) | `true`, `false` |
 
 ### SpecKit Patching
 
@@ -161,6 +179,8 @@ workflow:
   # When true: work on current branch, specs in specs/main/
   # When false: create feature branches and numbered spec folders
   currentBranchOnly: false
+  # (Experimental) Auto-create constitution if missing
+  autoConstitution: false
 
 # Output Settings
 output:
@@ -186,6 +206,8 @@ verbose: false
 ## Requirements
 
 - **Node.js** >= 18.0.0
+- **Ollama** installed
+  - Default model: `rnj-1`
 - **SpecKit** installed (`specify` CLI available)
 - **AI CLI** (one of):
   - [GitHub Copilot CLI](https://githubnext.com/projects/copilot-cli/) (installed and authenticated)
@@ -198,8 +220,12 @@ When you run SOKOLd, it creates/uses:
 ```
 your-project/
 ├── .sokold/
-│   └── config.yaml       # SOKOLd configuration
+│   ├── config.yaml       # SOKOLd configuration
+│   ├── state.yaml        # Current pipeline state
+│   └── history.yaml      # Run history
 ├── .specify/
+│   ├── memory/
+│   │   └── constitution.md  # Project constitution
 │   └── scripts/          # SpecKit scripts (auto-generated)
 └── specs/
     └── main/             # Feature specs (when currentBranchOnly=true)
@@ -228,7 +254,11 @@ sokold set workflow.currentBranchOnly true
 sokold "Add logging middleware"
 
 # Check what's done and what's next
-sokold --status
+sokold status
+
+# Review past runs
+sokold history
+sokold history 0    # Details of most recent run
 ```
 
 ## Pipeline Output
@@ -241,6 +271,9 @@ When running, SOKOLd shows:
   \__ \| |  | |   /| |  | | |    | |  | |
  ___) | |__| | . \| |__| | |____| |__| |
 |____/ \____/|_|\_\____/|______|_____/ 
+
+� Checking Ollama setup...
+✅ Ollama ready with model "rnj-1"
 
 📊 Project status:
    SpecKit initialized: ✓
@@ -256,7 +289,7 @@ When running, SOKOLd shows:
    → verify
 
 ⚡ Running: specify
-   $ copilot --allow-all-tools -p "/speckit.specify Add user auth..."
+   Deciding next action using model: rnj-1
    
 ✓ specify completed
 
@@ -278,6 +311,32 @@ When running, SOKOLd shows:
 ⏱️  Duration: 245s
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+## Architecture
+
+SOKOLd is built with the following components:
+
+```
+src/
+├── cli.ts         # Entry point, argument parsing, help display
+├── pipeline.ts    # Main orchestration - runs AI via Ollama
+├── detect.ts      # Project state detection (.specify, specs/, etc.)
+├── config.ts      # YAML configuration management
+├── state.ts       # Pipeline state tracking for --continue
+├── history.ts     # Run history tracking
+├── ollama.ts      # Ollama integration for local AI inference
+├── speckit-patch.ts # SpecKit script patching for branch control
+└── functions/     # Tool definitions for Ollama function calling
+    ├── speckit.ts # SpecKit agent functions (specify, plan, tasks, implement)
+    ├── misc.ts    # General functions (ask_user, run_command, etc.)
+    ├── helpers.ts # Helper utilities
+    └── types.ts   # Type definitions
+```
+
+SOKOLd uses **Ollama** for local AI inference, which provides:
+- Fast, local execution (no cloud API calls for orchestration)
+- Function calling to invoke SpecKit agents
+- Flexible model selection
 
 ## Exit Codes
 

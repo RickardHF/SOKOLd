@@ -3,7 +3,7 @@
 **Feature Branch**: `main`  
 **Created**: January 9, 2026  
 **Status**: Implemented  
-**Input**: User description: "SOKOLd is a thin CLI orchestrator that runs AI CLI tools (copilot/claude) to execute speckit workflows. CLI command is 'sokold' (lowercase). Architecture: 4 files only - cli.ts (arg parsing, help), pipeline.ts (runs AI CLI via spawn to call speckit agents), detect.ts (checks if .specify exists), config.ts (yaml config). The tool delegates ALL work to the AI CLI - no internal file manipulation. Flow: detect project state -> if no speckit run 'specify init' -> run speckit agents (specify, plan, tasks, implement) -> verify via AI -> fix loop -> summary. Keep it simple per Constitution Principle VII."
+**Input**: User description: "SOKOLd is a CLI orchestrator that uses local Ollama models to coordinate speckit workflows. It uses function calling to invoke AI CLI tools (copilot/claude) for SpecKit agent execution. The tool tracks pipeline state for resumption (--continue) and maintains history of all runs for context. Flow: detect project state -> ensure Ollama ready -> if no speckit run 'specify init' -> run speckit agents (specify, plan, tasks, implement) via function tools -> verify -> fix loop -> summary. Keep it simple per Constitution Principle VII."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -70,7 +70,7 @@ A new user wants to understand what commands are available and how to use sokold
 - **FR-002**: System MUST accept a feature description as a positional argument (e.g., `sokold "build a todo app"`)
 - **FR-003**: System MUST detect if `.specify/` folder exists in current directory
 - **FR-004**: System MUST run `specify init --here --ai <tool> --force` when `.specify/` is absent
-- **FR-005**: System MUST spawn the configured AI CLI tool (copilot or claude) with `-p` flag to invoke speckit agents
+- **FR-005**: System MUST use Ollama for local AI inference with function calling to invoke speckit agents
 - **FR-006**: System MUST run speckit agents in order: @speckit.specify → @speckit.plan → @speckit.tasks → @speckit.implement
 - **FR-007**: System MUST run verification after implementation via AI CLI
 - **FR-008**: System MUST retry fixes up to 3 times when verification finds issues
@@ -80,12 +80,20 @@ A new user wants to understand what commands are available and how to use sokold
 - **FR-012**: System MUST store configuration in `.sokold/config.yaml`
 - **FR-013**: System MUST display help when run with `--help` flag or no arguments
 - **FR-014**: System MUST delegate ALL file manipulation to the AI CLI - no direct file operations
+- **FR-015**: System MUST track pipeline state in `.sokold/state.yaml` for resumption support
+- **FR-016**: System MUST maintain run history in `.sokold/history.yaml` for context and review
+- **FR-017**: System MUST check Ollama availability and model presence before pipeline execution
+- **FR-018**: System MUST support `sokold history` commands for viewing and annotating past runs
 
 ### Key Entities
 
 - **Configuration**: User preferences stored in YAML (tool selection: copilot/claude)
-- **ProjectStatus**: Detection results (hasSpeckit, hasSpec, hasPlan, hasTasks)
+- **ProjectStatus**: Detection results (hasSpeckit, hasSpec, hasPlan, hasTasks, hasConstitution, hasExistingCode)
 - **ExecutionSummary**: Record of workflow execution (steps completed, success/failure, duration)
+- **PipelineState**: Current pipeline state for --continue support (description, completedSteps, currentStep)
+- **HistoryEntry**: Record of a pipeline run (id, description, steps, outcome, filesChanged)
+- **StepRecord**: Record of a single step execution within a run (step, outcome, prompt, duration)
+- **ToolResponse**: Standard response format for Ollama function tools (status, content)
 
 ## Success Criteria *(mandatory)*
 
@@ -100,12 +108,15 @@ A new user wants to understand what commands are available and how to use sokold
 ## Assumptions
 
 - User has Node.js 18+ installed
+- User has Ollama installed and running (`ollama serve`)
+- User has a compatible model pulled (default: `rnj-1`)
 - User has either `copilot` CLI or `claude` CLI installed and authenticated
 - User has `specify` CLI available (installed globally or via npx)
 - Project follows speckit conventions (specs in `specs/` directory)
 
 ## Constraints
 
-- **Architecture constraint**: Maximum 4 source files (cli.ts, pipeline.ts, detect.ts, config.ts)
+- **Architecture constraint**: Core logic in src/ directory with clear separation of concerns
 - **Simplicity constraint**: Per Constitution Principle VII - favor simplicity over elaborate abstractions
-- **Delegation constraint**: SOKOLd is a thin orchestrator; all intelligence lives in AI CLI tools
+- **Delegation constraint**: SOKOLd coordinates workflow; SpecKit agents handle actual code generation
+- **Local-first constraint**: Use Ollama for local AI inference to minimize cloud dependencies
